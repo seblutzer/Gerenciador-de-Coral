@@ -1,0 +1,37 @@
+{
+  "musicas": [
+    {
+      "id": 1770034257,
+      "root": "C",
+      "mode": "maior",
+      "transposition": 0,
+      "ranges": {
+        "Soprano": [
+          "A4",
+          "A5"
+        ],
+        "Mezzo-soprano": [
+          "A4",
+          "A5"
+        ],
+        "Contralto": [
+          "A4",
+          "A5"
+        ],
+        "Tenor": [
+          "A4",
+          "A5"
+        ],
+        "Barítono": [
+          "A4",
+          "A5"
+        ],
+        "Baixo": [
+          "A4",
+          "A5"
+        ]
+      },
+      "timestamp": "2026-02-02 09:10:57"
+    }
+  ]
+}

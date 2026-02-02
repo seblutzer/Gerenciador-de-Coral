@@ -2,14 +2,14 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import json
 import os
-import subprocess
-import sys
 import time
 from CoristasManager import CoristasManager
 from Constants import VOICES, VOICE_BASE_RANGES
 from KeyboardVisualizer import KeyboardVisualizer
 from RangeVisualizer import RangeVisualizer
 from GeneralFunctions import analyze_ranges_with_penalty, note_to_midi, transpose_note, midi_to_note
+from VocalTester import VocalTestCore, BeltIndicator
+import threading
 
 # ===== INTERFACE GRÁFICA =====
 class VoiceRangeApp:
@@ -36,31 +36,157 @@ class VoiceRangeApp:
         self.notebook.add(self.frame_analise, text="Análise de Transposição")
         self.setup_analise_tab()
 
-    def setup_coristas_tab(self):
-        """Configura a aba de gerenciamento de coristas"""
-        # Painel de entrada
-        input_frame = ttk.LabelFrame(self.frame_coristas, text="Adicionar/Editar Corista", padding=10)
-        input_frame.pack(fill="x", padx=10, pady=10)
+    def repeat_tone_vocal(self):
+        """Reproduz o tom atual novamente (se houver tom ativo)"""
+        if self.vocal_tester and hasattr(self.vocal_tester, 'current_playing_frequency'):
+            freq = self.vocal_tester.current_playing_frequency
+            if freq and freq > 0:
+                # Executa em outra thread para não bloquear a UI
+                threading.Thread(target=self.vocal_tester.play_note, args=(freq, 2), daemon=True).start()
+                self.status_label.config(text="Reproduzindo tom atual...", foreground='#27AE60')
+                return
+        # Caso não haja tom disponível
+        messagebox.showinfo("Aviso", "Nenhum tom atual para repetir.")
 
-        ttk.Label(input_frame, text="Nome:").grid(row=0, column=0, sticky="e", padx=5, pady=5)
-        self.entrada_nome = ttk.Entry(input_frame, width=30)
+    def _on_double_click_corista(self, event):
+        item_id = self.tree_coristas.focus()
+        if not item_id:
+            return
+
+        # Opcional: garanta que o item esteja selecionado
+        self.tree_coristas.selection_set(item_id)
+
+        # Tenta chamar a função de edição de corista já existente
+        # Se edit_corista_voz aceitar um argumento, passe-o; senão, chame sem argumentos
+        try:
+            self.edit_corista_voz(item_id)
+        except TypeError:
+            self.edit_corista_voz()
+
+    def setup_coristas_tab(self):
+        """Configura a aba de gerenciamento de coristas com frames independentes lado a lado"""
+        # Container principal com duas colunas independentes
+        main_frame = ttk.Frame(self.frame_coristas)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Left: Adicionar/Editar Corista
+        left_frame = ttk.LabelFrame(main_frame, text="Adicionar/Editar Corista", padding=10)
+        left_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+
+        # Right: Teste Vocal Integrado
+        right_frame = ttk.LabelFrame(main_frame, text="Teste Vocal Integrado", padding=8)
+        right_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
+
+        # Ajusta peso das colunas para manter os frames proporcionais
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.columnconfigure(1, weight=1)
+        main_frame.rowconfigure(0, weight=1)
+
+        # ===== LEFT FRAME: Campos Adicionar/Editar Corista =====
+        ttk.Label(left_frame, text="Nome:").grid(row=0, column=0, sticky="e", padx=5, pady=5)
+        self.entrada_nome = ttk.Entry(left_frame, width=30)
         self.entrada_nome.grid(row=0, column=1, padx=5, pady=5)
 
-        ttk.Label(input_frame, text="Range Min (ex: G3):").grid(row=0, column=2, sticky="e", padx=5, pady=5)
-        self.entrada_min = ttk.Entry(input_frame, width=15)
+        ttk.Label(left_frame, text="Range Min (ex: G3):").grid(row=0, column=2, sticky="e", padx=5, pady=5)
+        self.entrada_min = ttk.Entry(left_frame, width=15)
         self.entrada_min.grid(row=0, column=3, padx=5, pady=5)
 
-        ttk.Label(input_frame, text="Range Max (ex: C5):").grid(row=1, column=2, sticky="e", padx=5, pady=5)
-        self.entrada_max = ttk.Entry(input_frame, width=15)
+        ttk.Label(left_frame, text="Range Max (ex: C5):").grid(row=1, column=2, sticky="e", padx=5, pady=5)
+        self.entrada_max = ttk.Entry(left_frame, width=15)
         self.entrada_max.grid(row=1, column=3, padx=5, pady=5)
 
-        # Botão para teste vocal
-        btn_vocal_test = ttk.Button(input_frame, text="🎤 Buscar Teste Vocal",
-                                    command=self.search_and_fill_vocal_test)
-        btn_vocal_test.grid(row=0, column=4, rowspan=2, padx=10, pady=5)
+        # Botão Adicionar na esquerda
+        btn_add = ttk.Button(left_frame, text="Adicionar Corista", command=self.add_corista)
+        btn_add.grid(row=2, column=0, columnspan=4, pady=10)
+
+        # Estado e repetição
+        state_row = ttk.Frame(right_frame)
+        state_row.pack(anchor="w", pady=(0, 5))
+
+        ttk.Label(state_row, text="Estado: Pronto", font=("Arial", 9),
+                  foreground="#2E86AB").pack(side="left")
+
+        self.btn_repeat_tone = ttk.Button(state_row, text="🔁 Repetir Tom",
+                                          command=self.repeat_tone_vocal)
+        self.btn_repeat_tone.pack(side="left", padx=(8, 0))
+
+        # ================= Botões de Teste =================
+        buttons_row = ttk.Frame(right_frame)
+        buttons_row.pack(fill="x", pady=5)
+
+        self.btn_start_test = ttk.Button(buttons_row, text="🏁 Iniciar Teste",
+                                         command=self.start_vocal_test)
+        self.btn_start_test.grid(row=0, column=0, padx=3, sticky="ew")
+
+        self.btn_quick_test = ttk.Button(buttons_row, text="⚡ Teste Rápido",
+                                         command=self.start_quick_vocal_test)
+        self.btn_quick_test.grid(row=0, column=1, padx=3, sticky="ew")
+
+        buttons_row.columnconfigure(0, weight=1)
+        buttons_row.columnconfigure(1, weight=1)
+
+        # ===== Botões de marcação =====
+        marking_row = ttk.Frame(right_frame)
+        marking_row.pack(fill="x", pady=5)
+
+        self.btn_too_low = ttk.Button(marking_row, text="⬇️ Grave D.",
+                                      command=self.mark_too_low_vocal, state='disabled')
+        self.btn_too_low.grid(row=0, column=0, padx=2, sticky="ew")
+
+        self.btn_too_high = ttk.Button(marking_row, text="⬆️ Agudo D.",
+                                       command=self.mark_too_high_vocal, state='disabled')
+        self.btn_too_high.grid(row=0, column=1, padx=2, sticky="ew")
+
+        self.btn_stop_test = ttk.Button(marking_row, text="🛑 Parar",
+                                        command=self.stop_vocal_test, state='disabled')
+        self.btn_stop_test.grid(row=0, column=2, padx=2, sticky="ew")
+
+        marking_row.columnconfigure(0, weight=1)
+        marking_row.columnconfigure(1, weight=1)
+        marking_row.columnconfigure(2, weight=1)
+
+        # ===== INDICADOR VISUAL (BELT) =====
+        self.belt_indicator = BeltIndicator(right_frame, width=300, height=50)
+        # Opcional: definir o alcance de semitons que o belt deve cobrir
+        self.belt_indicator.set_range(-12, 12)
+        self.belt_indicator.pack(pady=5)
+
+        # ===== PROGRESSO DE TEMPO =====
+        self.time_var = tk.DoubleVar()
+        self.progress_bar = ttk.Progressbar(right_frame, variable=self.time_var,
+                                            maximum=100, length=300, mode='determinate')
+        self.progress_bar.pack(pady=3)
+
+        self.time_label = ttk.Label(right_frame, text="Tempo: 0.0s / 3.0s",
+                                    font=("Arial", 8))
+        self.time_label.pack(pady=(0, 5))
+
+        # ===== NOTAS ESPERADA E DETECTADA =====
+        notes_frame = ttk.Frame(right_frame)
+        notes_frame.pack(fill="x", pady=5)
+
+        ttk.Label(notes_frame, text="Esperada:", font=("Arial", 8, "bold")).pack(side="left", padx=2)
+        self.expected_note_label = ttk.Label(notes_frame, text="--", font=("Arial", 9),
+                                             foreground="#2E86AB")
+        self.expected_note_label.pack(side="left", padx=2)
+
+        ttk.Label(notes_frame, text="→", font=("Arial", 10)).pack(side="left", padx=5)
+
+        ttk.Label(notes_frame, text="Detectada:", font=("Arial", 8, "bold")).pack(side="left", padx=2)
+        self.detected_note_label = ttk.Label(notes_frame, text="--", font=("Arial", 9),
+                                             foreground="#888")
+        self.detected_note_label.pack(side="left", padx=2)
+
+        # ===== STATUS =====
+        self.status_label = ttk.Label(right_frame, text="Aguardando...",
+                                      font=("Arial", 9), foreground="#666")
+        self.status_label.pack(pady=5)
+
+        # Inicializa a instância do VocalTestCore
+        self.vocal_tester = None
 
         # Botão adicionar
-        btn_add = ttk.Button(input_frame, text="Adicionar Corista", command=self.add_corista)
+        btn_add = ttk.Button(left_frame, text="Adicionar Corista", command=self.add_corista)
         btn_add.grid(row=2, column=0, columnspan=5, pady=10)
 
         # Tabela de coristas
@@ -69,13 +195,14 @@ class VoiceRangeApp:
 
         # Cria Treeview
         columns = ("Nome", "Range Min", "Range Max", "Voz Calculada", "Voz Atribuída")
-        self.tree_coristas = ttk.Treeview(table_frame, columns=columns, height=12, show="tree headings")
+        self.tree_coristas = ttk.Treeview(table_frame, columns=columns, height=12, show="headings")
 
         for col in columns:
-            self.tree_coristas.column(col, width=150, anchor="center")
+            self.tree_coristas.column(col, width=100, anchor="center")
             self.tree_coristas.heading(col, text=col)
 
         self.tree_coristas.pack(fill="both", expand=True)
+        self.tree_coristas.bind("<Double-1>", self._on_double_click_corista)
 
         # Scrollbar
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree_coristas.yview)
@@ -94,26 +221,163 @@ class VoiceRangeApp:
         # Carrega dados iniciais
         self.reload_coristas_table()
 
-    def search_and_fill_vocal_test(self):
-        """Busca o teste vocal e preenche os campos de range"""
-        result = messagebox.askyesno("Teste Vocal",
-                                     "Isto abrirá o programa de Teste Vocal.\n\n"
-                                     "Após concluir o teste, os ranges serão preenchidos automaticamente.\n\n"
-                                     "Deseja continuar?")
-        if not result:
+    def start_vocal_test(self):
+        """Inicia o teste vocal normal"""
+        if self.vocal_tester is not None:
+            messagebox.showwarning("Aviso", "Um teste já está em andamento!")
             return
 
-        # Executa o teste vocal
-        range_min, range_max = self.run_vocal_test()
+        self.vocal_tester = VocalTestCore()
+        self.vocal_tester.set_ui_callbacks(
+            update_callback=self.update_vocal_test_ui,
+            complete_callback=self.on_vocal_test_complete,
+            button_callback=self.update_button_states
+        )
 
+        self.btn_start_test.config(state='disabled')
+        self.btn_quick_test.config(state='disabled')
+        self.btn_stop_test.config(state='normal')
+
+        # Ambos habilitados ao iniciar
+        #self.btn_too_low.config(state='normal')
+        #self.btn_too_high.config(state='normal')
+        self.status_label.config(text="Iniciando teste normal...", foreground='#F39C12')
+
+        threading.Thread(target=self.vocal_tester.start_test, daemon=True).start()
+
+    def start_quick_vocal_test(self):
+        """Inicia o teste vocal rápido"""
+        if self.vocal_tester is not None:
+            messagebox.showwarning("Aviso", "Um teste já está em andamento!")
+            return
+
+        self.vocal_tester = VocalTestCore()
+        self.vocal_tester.set_ui_callbacks(
+            update_callback=self.update_vocal_test_ui,
+            complete_callback=self.on_vocal_test_complete,
+            button_callback=self.update_button_states
+        )
+
+        self.btn_start_test.config(state='disabled')
+        self.btn_quick_test.config(state='disabled')
+        self.btn_stop_test.config(state='normal')
+
+        self.status_label.config(text="Iniciando teste rápido...", foreground='#F39C12')
+
+        threading.Thread(target=self.vocal_tester.start_quick_test, daemon=True).start()
+
+    def mark_too_low_vocal(self):
+        """Marca como grave demais"""
+        if self.vocal_tester:
+            self.vocal_tester.mark_too_low()
+
+    def mark_too_high_vocal(self):
+        """Marca como agudo demais"""
+        if self.vocal_tester:
+            self.vocal_tester.mark_too_high()
+
+    def stop_vocal_test(self):
+        """Para o teste vocal"""
+        if self.vocal_tester:
+            self.vocal_tester.stop_test()
+
+        self.btn_start_test.config(state='normal')
+        self.btn_quick_test.config(state='normal')
+        self.btn_stop_test.config(state='disabled')
+        self.btn_too_low.config(state='disabled')
+        self.btn_too_high.config(state='disabled')
+
+        self.status_label.config(text="Teste cancelado", foreground='#E74C3C')
+        self.vocal_tester = None
+
+    def update_vocal_test_ui(self, **kwargs):
+        """Atualiza os elementos visuais do teste vocal"""
+        if 'expected_note' in kwargs:
+            self.expected_note_label.config(text=kwargs['expected_note'])
+
+        if 'expected_freq' in kwargs:
+            # Pode ser frequência ou texto
+            pass
+
+        if 'detected_note' in kwargs:
+            self.detected_note_label.config(text=kwargs['detected_note'])
+
+        if 'status' in kwargs:
+            color = kwargs.get('status_color', '#666')
+            self.status_label.config(text=kwargs['status'], foreground=color)
+
+        if 'time' in kwargs:
+            self.time_var.set(kwargs['time'])
+
+        if 'time_text' in kwargs:
+            self.time_label.config(text=kwargs['time_text'])
+
+        if 'offset_cents' in kwargs:
+            self.belt_indicator.set_offset(kwargs['offset_cents'])
+
+        # Novo: aceitar também atualizações diretas de botões
+        button_map = [
+            ('start_button', getattr(self, 'btn_start_test', None)),
+            ('start_quick_button', getattr(self, 'btn_quick_test', None)),
+            ('stop_button', getattr(self, 'btn_stop_test', None)),
+            ('repeat_button', getattr(self, 'btn_repeat', None)),  # pode não existir
+            ('too_low_button', getattr(self, 'btn_too_low', None)),
+            ('too_high_button', getattr(self, 'btn_too_high', None)),
+        ]
+
+        for key, btn in button_map:
+            if btn is None:
+                continue
+            if key in kwargs:
+                btn.config(state=kwargs[key])
+
+        # Compatibilidade com o formato antigo: button_states
+        if 'button_states' in kwargs:
+            states = kwargs['button_states']
+            if self.btn_too_low:
+                self.btn_too_low.config(state=states.get('too_low', 'disabled'))
+            if self.btn_too_high:
+                self.btn_too_high.config(state=states.get('too_high', 'disabled'))
+            # opcional: mapear outros botões se houver
+            # Exemplos adicionais:
+            if 'start' in states and self.btn_start_test:
+                self.btn_start_test.config(state=states['start'])
+            if 'start_quick' in states and self.btn_quick_test:
+                self.btn_quick_test.config(state=states['start_quick'])
+            if 'stop' in states and self.btn_stop_test:
+                self.btn_stop_test.config(state=states['stop'])
+
+    def update_button_states(self, **kwargs):
+        """Atualiza estado dos botões"""
+        button_states = kwargs.get('button_states', {})
+        self.btn_too_low.config(state=button_states.get('too_low', 'disabled'))
+        self.btn_too_high.config(state=button_states.get('too_high', 'disabled'))
+
+    def on_vocal_test_complete(self, range_min, range_max):
+        """Chamado quando o teste vocal termina"""
         if range_min and range_max:
             self.entrada_min.delete(0, "end")
             self.entrada_min.insert(0, range_min)
             self.entrada_max.delete(0, "end")
             self.entrada_max.insert(0, range_max)
+
+            self.status_label.config(
+                text=f"✓ Ranges preenchidos: {range_min} - {range_max}",
+                foreground='#27AE60'
+            )
             messagebox.showinfo("Sucesso", f"Ranges preenchidos:\nMín: {range_min}\nMáx: {range_max}")
         else:
-            messagebox.showwarning("Aviso", "Nenhum resultado de teste foi recebido")
+            self.status_label.config(text="Nenhum resultado", foreground='#E74C3C')
+            messagebox.showwarning("Aviso", "Teste foi cancelado ou não retornou resultados")
+
+        # Reset dos botões
+        self.btn_start_test.config(state='normal')
+        self.btn_quick_test.config(state='normal')
+        self.btn_stop_test.config(state='disabled')
+        self.btn_too_low.config(state='disabled')
+        self.btn_too_high.config(state='disabled')
+
+        self.vocal_tester = None
 
     def setup_analise_tab(self):
         """Configura a aba de análise de transposição"""
@@ -193,42 +457,6 @@ class VoiceRangeApp:
 
         self.current_result = None
 
-    def run_vocal_test(self):
-        """Executa o programa de teste vocal e aguarda os resultados"""
-        try:
-            # Executa o teste vocal como subprocess
-            subprocess.Popen([sys.executable, "vocal_tester.py"])
-
-            # Aguarda a criação do arquivo de resultado (máximo 60 segundos)
-            result_file = "vocal_test_result.json"
-            timeout = 180
-            elapsed = 0
-
-            while elapsed < timeout:
-                if os.path.exists(result_file):
-                    try:
-                        with open(result_file, 'r', encoding='utf-8') as f:
-                            result = json.load(f)
-
-                        # Remove o arquivo após leitura
-                        os.remove(result_file)
-
-                        return result.get('range_min'), result.get('range_max')
-                    except:
-                        time.sleep(0.5)
-                        elapsed += 0.5
-                        continue
-
-                time.sleep(0.5)
-                elapsed += 0.5
-
-            messagebox.showwarning("Aviso", "Teste vocal não retornou resultados em tempo hábil")
-            return None, None
-
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao executar teste vocal: {e}")
-            return None, None
-
     def add_corista(self):
         nome = self.entrada_nome.get().strip()
         range_min = self.entrada_min.get().strip()
@@ -293,43 +521,8 @@ class VoiceRangeApp:
         ttk.Label(range_frame, text=f"Range: {corista['range_min']} - {corista['range_max']}",
                   font=("Arial", 10)).pack(side="left", padx=10)
 
-        # Botão para atualizar range pelo teste vocal
-        def update_range_from_test():
-            result = messagebox.askyesno("Teste Vocal",
-                                         "Isto abrirá o programa de Teste Vocal.\n\n"
-                                         "Após concluir o teste, o range será atualizado.\n\n"
-                                         "Deseja continuar?")
-            if not result:
-                return
-
-            range_min, range_max = self.run_vocal_test()
-            if range_min and range_max:
-                corista['range_min'] = range_min
-                corista['range_max'] = range_max
-
-                # Recalcula vozes compatíveis
-                vozes_recomendadas, vozes_possiveis = self.coristas_mgr.calculate_compatible_voices(
-                    range_min, range_max
-                )
-                corista['vozes_recomendadas'] = vozes_recomendadas
-                corista['vozes_possiveis'] = vozes_possiveis
-
-                # Atualiza a voz calculada
-                voz_calculada = vozes_recomendadas[0] if vozes_recomendadas else (
-                    vozes_possiveis[0][0] if vozes_possiveis else VOICES[0]
-                )
-                corista['voz_calculada'] = voz_calculada
-                var_voz.set(voz_calculada)
-
-                # Atualiza o label
-                ttk.Label(range_frame, text=f"Range: {range_min} - {range_max}",
-                          font=("Arial", 10), foreground="green").pack(side="left", padx=10)
-
-                messagebox.showinfo("Sucesso", f"Range atualizado:\nMín: {range_min}\nMáx: {range_max}\n\n"
-                                               f"Voz recalculada: {voz_calculada}")
-
-        ttk.Button(range_frame, text="🎤 Atualizar via Teste Vocal",
-                   command=update_range_from_test).pack(side="left", padx=10)
+        ttk.Label(range_frame, text="💡 Dica: Use o teste vocal na aba de Adicionar Corista",
+                  font=("Arial", 8), foreground="#666").pack(side="left", padx=10)
 
         ttk.Label(dialog, text=f"Voz Calculada: {corista['voz_calculada']}", font=("Arial", 10)).pack(pady=5)
 
