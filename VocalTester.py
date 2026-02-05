@@ -1,4 +1,3 @@
-import json
 import numpy as np
 import sounddevice as sd
 import threading
@@ -7,7 +6,7 @@ import time
 from collections import deque
 import math
 import tkinter as tk
-
+from Constants import NOTES_FREQUENCY_HZ
 class BeltIndicator(tk.Canvas):
     """
     BeltIndicator self-contained:
@@ -18,7 +17,7 @@ class BeltIndicator(tk.Canvas):
     - Fácil de copiar/colar entre arquivos sem dependências externas.
     """
 
-    def __init__(self, master, width=320, height=60,
+    def __init__(self, master, width=640, height=180,
                  semitone_min=-12, semitone_max=12, sigma=3.0, **kwargs):
         super().__init__(master, width=width, height=height,
                          bg='white', highlightthickness=0, **kwargs)
@@ -147,30 +146,138 @@ class BeltIndicator(tk.Canvas):
                          cents_x, belt_y + belt_height // 2 + 4,
                          fill='#2c3e50', width=2)
 
+class PitchLineChart(tk.Canvas):
+    """
+    Gráfico de pitch em tempo real com janela de 5 segundos.
+    - Novo ponto fica na borda direita; o histórico preenche para a esquerda.
+    - Mostra nomes de notas na esquerda para a faixa visível.
+    - Altura ajustável para ocupar espaço vertical desejado.
+    """
+    def __init__(self, master, width=700, height=230,
+                 min_midi=40, max_midi=84, max_points=600,
+                 window_seconds=5.0, **kwargs):
+        super().__init__(master, width=width, height=height,
+                         bg='white', highlightthickness=0, **kwargs)
+        self.width = width
+        self.height = height
+        self.min_midi = min_midi
+        self.max_midi = max_midi
+        self.max_points = max_points
+        self.window_seconds = window_seconds
+
+        # Dados: cada item é {'ts': float, 'midi': float}
+        self._samples = deque(maxlen=self.max_points)
+
+        self.plot_min_midi = self.min_midi
+        self.plot_max_midi = self.max_midi
+        self.draw_initial()
+
+    def _midi_to_note_name(self, midi):
+        note_names = ["C", "C#", "D", "D#", "E", "F",
+                      "F#", "G", "G#", "A", "A#", "B"]
+        octave = int(midi // 12) - 1
+        return f"{note_names[int(midi % 12)]}{octave}"
+
+    def add_sample(self, freq_hz):
+        now = time.time()
+        midi_float = None
+        if freq_hz and freq_hz > 0:
+            # MIDI como float (para maior precisão)
+            midi_float = 69.0 + 12.0 * math.log2(freq_hz / 440.0)
+        if midi_float is None:
+            return
+
+        # Limite de MIDI float
+        midi_float = max(0.0, min(127.0, midi_float))
+        self._samples.append({'ts': now, 'midi': midi_float})
+
+        # Remover amostras antigas (janela de 5s)
+        cutoff = now - self.window_seconds
+        while self._samples and self._samples[0]['ts'] < cutoff:
+            self._samples.popleft()
+
+        # Atualizar faixa visível com base nos dados da janela
+        if self._samples:
+            min_midi = min(s['midi'] for s in self._samples)
+            max_midi = max(s['midi'] for s in self._samples)
+            self.plot_min_midi = max(0.0, min_midi - 3.0)
+            self.plot_max_midi = min(127.0, max_midi + 3.0)
+        else:
+            self.plot_min_midi = self.min_midi
+            self.plot_max_midi = self.max_midi
+
+        self.draw()
+
+    def draw_initial(self):
+        self.delete("all")
+        self.create_rectangle(0, 0, self.width, self.height, fill='white', outline='')
+
+    def draw(self):
+        self.delete("all")
+
+        w, h = self.width, self.height
+        pad = 12
+
+        # Fundo
+        self.create_rectangle(0, 0, w, h, fill='white', outline='')
+
+        if not self._samples:
+            return
+
+        # Função: MIDI (float) -> Y considerando a faixa visível
+        def midi_to_y(midi_val):
+            span = max(1e-6, self.plot_max_midi - self.plot_min_midi)
+            return pad + (h - 2*pad) * (1.0 - (midi_val - self.plot_min_midi) / span)
+
+        # Desenhar grade de semitons visíveis (na faixa atual)
+        # Mostrar apenas inteiros dentro da faixa visível
+        min_int = int(math.floor(self.plot_min_midi))
+        max_int = int(math.ceil(self.plot_max_midi))
+        for m in range(min_int, max_int + 1):
+            y = midi_to_y(float(m))
+            self.create_line(pad, y, w - pad, y, fill="#f0f0f0")
+            note_name = self._midi_to_note_name(float(m))
+            self.create_text(20, y, text=note_name, anchor="e", fill="#666", font=("Arial", 8))
+
+        # Desenhar linha com os samples da janela (histórico)
+        samples = list(self._samples)
+        if len(samples) < 2:
+            return
+
+        t0 = time.time() - self.window_seconds
+        span_time = max(1e-6, self.window_seconds)
+
+        xs = []
+        ys = []
+        for s in samples:
+            ts = s['ts']
+            midi = s['midi']
+            # x vai do pad (quando ts == t0) até w - pad (quando ts == now)
+            x = pad + ((ts - t0) / span_time) * (w - 2*pad)
+            x = max(pad, min(w - pad, x))
+            y = midi_to_y(midi)
+            xs.append(x)
+            ys.append(y)
+
+        coords = []
+        for x, y in zip(xs, ys):
+            coords.extend([x, y])
+
+        self.create_line(*coords, fill='#1f77b4', width=2)
+
+        # marcador na amostra mais recente (à direita)
+        x_last, y_last = xs[-1], ys[-1]
+        self.create_oval(x_last-4, y_last-4, x_last+4, y_last+4, fill='#e74c3c', outline='')
 
 class VocalTestCore:
     """Núcleo de teste vocal sem interface gráfica - retorna dados apenas"""
+    NOISE_GATE_ENABLED = True
+    NOISE_GATE_THRESHOLD = 0.0115  # valor em amplitude RMS (ajuste conforme o conjunto de mic)
+    DEFAULT_TESTING_TIME = 5
 
     def __init__(self):
         # Notas musicais...
-        self.notes = {'C0': 16.35, 'C#0': 17.32, 'D0': 18.35, 'D#0': 19.45, 'E0': 20.6, 'F0': 21.83, 'F#0': 23.12,
-                      'G0': 24.5, 'G#0': 25.96, 'A0': 27.5, 'A#0': 29.13, 'B0': 30.87, 'C1': 32.7, 'C#1': 34.65,
-                      'D1': 36.71, 'D#1': 38.89, 'E1': 41.2, 'F1': 43.65, 'F#1': 46.25, 'G1': 49.0, 'G#1': 51.91,
-                      'A1': 55.0, 'A#1': 58.27, 'B1': 61.73, 'C2': 65.41, 'C#2': 69.29, 'D2': 73.41, 'D#2': 77.78,
-                      'E2': 82.41, 'F2': 87.31, 'F#2': 92.5, 'G2': 98.0, 'G#2': 103.82, 'A2': 110.0, 'A#2': 116.54,
-                      'B2': 123.47, 'C3': 130.81, 'C#3': 138.59, 'D3': 146.83, 'D#3': 155.56, 'E3': 164.81,
-                      'F3': 174.61, 'F#3': 184.99, 'G3': 195.99, 'G#3': 207.65, 'A3': 220.0, 'A#3': 233.08,
-                      'B3': 246.94, 'C4': 261.62, 'C#4': 277.18, 'D4': 293.66, 'D#4': 311.12, 'E4': 329.62,
-                      'F4': 349.22, 'F#4': 369.99, 'G4': 391.99, 'G#4': 415.3, 'A4': 439.99, 'A#4': 466.15,
-                      'B4': 493.87, 'C5': 523.24, 'C#5': 554.35, 'D5': 587.32, 'D#5': 622.24, 'E5': 659.24,
-                      'F5': 698.44, 'F#5': 739.97, 'G5': 783.97, 'G#5': 830.59, 'A5': 879.98, 'A#5': 932.31,
-                      'B5': 987.75, 'C6': 1046.48, 'C#6': 1108.71, 'D6': 1174.63, 'D#6': 1244.48, 'E6': 1318.48,
-                      'F6': 1396.88, 'F#6': 1479.95, 'G6': 1567.95, 'G#6': 1661.18, 'A6': 1759.96, 'A#6': 1864.62,
-                      'B6': 1975.49, 'C7': 2092.96, 'C#7': 2217.41, 'D7': 2349.27, 'D#7': 2488.96, 'E7': 2636.96,
-                      'F7': 2793.77, 'F#7': 2959.89, 'G7': 3135.9, 'G#7': 3322.37, 'A7': 3519.93, 'A#7': 3729.23,
-                      'B7': 3950.98, 'C8': 4185.92, 'C#8': 4434.83, 'D8': 4698.54, 'D#8': 4977.93, 'E8': 5273.93,
-                      'F8': 5587.53, 'F#8': 5919.78, 'G8': 6271.79, 'G#8': 6644.73, 'A8': 7039.85, 'A#8': 7458.46,
-                      'B8': 7901.96}
+        self.notes = NOTES_FREQUENCY_HZ
 
         # Ordem das notas
         self.note_sequence = list(self.notes.keys())
@@ -179,6 +286,9 @@ class VocalTestCore:
         # Break em caso de parar
         self.max_amplitude = 1e-6
         self.silence_break_time = 0.0
+
+        # Novo: flag para calibração rápida pronta + controle de repetição
+        self.quick_test_calibration_complete = False
 
         # Nota atual para repetição
         self.current_playing_note = None
@@ -205,6 +315,8 @@ class VocalTestCore:
         self.c4_skipped_as_high = False
         self.first_note_achieved = False
         self.should_descend_after_ascending = True
+        self._testing_time = VocalTestCore.DEFAULT_TESTING_TIME
+
 
         # Modo do teste: 'normal' ou 'quick'
         self.test_mode = 'normal'
@@ -214,6 +326,11 @@ class VocalTestCore:
         self.on_update_ui = None
         self.on_test_complete = None
         self.on_request_button_state = None
+
+
+    def testing_time(self, value):
+        # Garantir que seja inteiro (ou ajuste conforme o esperado)
+        self._testing_time = int(value)
 
     def set_ui_callbacks(self, update_callback, complete_callback, button_callback):
         """Define callbacks para comunicação com a UI"""
@@ -343,7 +460,7 @@ class VocalTestCore:
         self.quick_test_calibration_complete = True
         self.first_note_achieved = True
         self.phase = 'ascending'
-        self.current_note_index = self.note_sequence.index(self.highest_note)
+        self.current_note_index = self.note_sequence.index(self.highest_note) + 1
         self.should_descend_after_ascending = True
         self._update_ui(
             status="Calibração completa! Iniciando teste...",
@@ -357,7 +474,7 @@ class VocalTestCore:
     def calibrate_highest_note(self):
         """Captura a nota mais aguda que o usuário consegue fazer - com critério de 3 segundos de manutenção da MESMA nota"""
         self._update_ui(
-            status="Cante a nota MAIS AGUDA que conseguir! Mantenha por 3 segundos.",
+            status=f"Cante a nota MAIS AGUDA que conseguir! Mantenha por {self._testing_time} segundos.",
             status_color='#F39C12',
             expected_note="AGUDO",
             expected_freq="Sua nota mais aguda",
@@ -378,38 +495,38 @@ class VocalTestCore:
         stream.start()
 
         try:
+
             while self.is_testing and self.is_listening:
                 audio_chunk, _ = stream.read(self.chunk_size)
                 audio_chunk = audio_chunk.flatten()
 
                 duration_per_chunk = self.chunk_size / float(self.sample_rate)
 
+
                 if audio_chunk is not None and len(audio_chunk) > 0:
                     rms = float(np.sqrt(np.mean(np.square(audio_chunk.astype(np.float64)))))
 
-                    if rms > self.max_amplitude:
-                        self.max_amplitude = rms if rms > 0 else self.max_amplitude
+                    # Noise Gate: se habilitado e RMS abaixo do limiar, treat como silêncio
 
-                    if rms < 0.5 * max(self.max_amplitude, 1e-9):
+                    if self.NOISE_GATE_ENABLED and rms < self.NOISE_GATE_THRESHOLD:
                         self.silence_break_time += duration_per_chunk
+                        detected_freq = None
                     else:
-                        self.silence_break_time = 0.0
 
-                    if self.silence_break_time >= 0.5:
-                        self.frequency_buffer.clear()
-                        self.correct_time = 0.0
-                        last_stable_note = None  # MUDANÇA: reseta nota estável
-                        self.silence_break_time = 0.0
-                        self._update_ui(
-                            status="Pausa de silêncio detectada. Reiniciando contagem...",
-                            status_color='#F39C12',
-                            time_text=f"Tempo mantendo a nota: 0.0s / 3.0s"
-                        )
+                        if rms > self.max_amplitude:
+                            self.max_amplitude = rms if rms > 0 else self.max_amplitude
+                        if rms < 0.5 * max(self.max_amplitude, 1e-9):
+                            self.silence_break_time += duration_per_chunk
+                        else:
+                            self.silence_break_time = 0.0
 
-                detected_freq = self.detect_pitch(audio_chunk)
+                        detected_freq = self.detect_pitch(audio_chunk)
 
                 if detected_freq is not None and detected_freq > 0:
                     self.frequency_buffer.append(detected_freq)
+
+                    # Envio imediato do pitch em Hz para a UI (para plotar)
+                    self._update_ui(pitch_hz=detected_freq)
 
                     if len(self.frequency_buffer) >= 20:
                         average_freq = np.mean(list(self.frequency_buffer))
@@ -444,11 +561,11 @@ class VocalTestCore:
                                 status=f"✓ Mantendo {average_note} (média)!",
                                 status_color='#27AE60',
                                 detected_note=average_note if average_note else "--",
-                                time_text=f"Tempo mantendo a nota: {self.correct_time:.1f}s / 3.0s",
-                                time=min(100, (self.correct_time / 3.0) * 100)
+                                time_text=f"Tempo mantendo a nota: {self.correct_time:.1f}s / {self._testing_time}.0s",
+                                time=min(100, (self.correct_time / self._testing_time) * 100)
                             )
 
-                            if self.correct_time >= 3.0:
+                            if self.correct_time >= self._testing_time:
                                 self.highest_note = average_note
                                 self._update_ui(
                                     status=f"✓ Nota aguda capturada: {self.highest_note}!",
@@ -466,14 +583,14 @@ class VocalTestCore:
                                 detected_freq=f"{average_freq:.2f} Hz"
                             )
 
-                        progress = min(100, (self.correct_time / 3.0) * 100)
+                        progress = min(100, (self.correct_time / self._testing_time) * 100)
                 else:
                     self._update_ui(
                         status="Nenhuma nota detectada. Cante!",
                         status_color='#E74C3C',
                         detected_note="--",
                         detected_freq="-- Hz",
-                        time_text="Tempo mantendo a nota: 0.0s / 3.0s"
+                        time_text=f"Tempo mantendo a nota: 0.0s / {self._testing_time}.0s"
                     )
                     self.correct_time = 0
                     self.frequency_buffer.clear()
@@ -491,7 +608,7 @@ class VocalTestCore:
     def calibrate_lowest_note(self):
         """Captura a nota mais grave que o usuário consegue fazer - com critério de 3 segundos de manutenção da MESMA nota"""
         self._update_ui(
-            status="Cante a nota MAIS GRAVE que conseguir! Mantenha por 3 segundos.",
+            status=f"Cante a nota MAIS GRAVE que conseguir! Mantenha por {self._testing_time} segundos.",
             status_color='#F39C12',
             expected_note="GRAVE",
             expected_freq="Sua nota mais grave",
@@ -522,29 +639,28 @@ class VocalTestCore:
                 if audio_chunk is not None and len(audio_chunk) > 0:
                     rms = float(np.sqrt(np.mean(np.square(audio_chunk.astype(np.float64)))))
 
-                    if rms > self.max_amplitude:
-                        self.max_amplitude = rms if rms > 0 else self.max_amplitude
+                    # Noise Gate: se habilitado e RMS abaixo do limiar, trate como silêncio
 
-                    if rms < 0.5 * max(self.max_amplitude, 1e-9):
+                    if self.NOISE_GATE_ENABLED and rms < self.NOISE_GATE_THRESHOLD:
                         self.silence_break_time += duration_per_chunk
+                        detected_freq = None
                     else:
-                        self.silence_break_time = 0.0
 
-                    if self.silence_break_time >= 0.5:
-                        self.frequency_buffer.clear()
-                        self.correct_time = 0.0
-                        last_stable_note = None  # MUDANÇA: reseta nota estável
-                        self.silence_break_time = 0.0
-                        self._update_ui(
-                            status="Pausa de silêncio detectada. Reiniciando contagem...",
-                            status_color='#F39C12',
-                            time_text=f"Tempo mantendo a nota: 0.0s / 3.0s"
-                        )
+                        if rms > self.max_amplitude:
+                            self.max_amplitude = rms if rms > 0 else self.max_amplitude
 
-                detected_freq = self.detect_pitch(audio_chunk)
+                        if rms < 0.5 * max(self.max_amplitude, 1e-9):
+                            self.silence_break_time += duration_per_chunk
+                        else:
+                            self.silence_break_time = 0.0
+
+                        detected_freq = self.detect_pitch(audio_chunk)
 
                 if detected_freq is not None and detected_freq > 0:
                     self.frequency_buffer.append(detected_freq)
+
+                    # Envio imediato do pitch em Hz para a UI (para plotar)
+                    self._update_ui(pitch_hz=detected_freq)
 
                     if len(self.frequency_buffer) >= 20:
                         average_freq = np.mean(list(self.frequency_buffer))
@@ -579,11 +695,11 @@ class VocalTestCore:
                                 status=f"✓ Mantendo {average_note} (média)!",
                                 status_color='#27AE60',
                                 detected_note=average_note if average_note else "--",
-                                time_text=f"Tempo mantendo a nota: {self.correct_time:.1f}s / 3.0s",
-                                time=min(100, (self.correct_time / 3.0) * 100)
+                                time_text=f"Tempo mantendo a nota: {self.correct_time:.1f}s / {self._testing_time}.0s",
+                                time=min(100, (self.correct_time / self._testing_time) * 100)
                             )
 
-                            if self.correct_time >= 3.0:
+                            if self.correct_time >= self._testing_time:
                                 self.lowest_note = average_note
                                 self._update_ui(
                                     status=f"✓ Nota grave capturada: {self.lowest_note}!",
@@ -601,20 +717,19 @@ class VocalTestCore:
                                 detected_freq=f"{average_freq:.2f} Hz"
                             )
 
-                        progress = min(100, (self.correct_time / 3.0) * 100)
+                        progress = min(100, (self.correct_time / self._testing_time) * 100)
                 else:
                     self._update_ui(
                         status="Nenhuma nota detectada. Cante!",
                         status_color='#E74C3C',
                         detected_note="--",
                         detected_freq="-- Hz",
-                        time_text="Tempo mantendo a nota: 0.0s / 3.0s"
+                        time_text=f"Tempo mantendo a nota: 0.0s / {self._testing_time}.0s"
                     )
                     self.correct_time = 0
                     self.frequency_buffer.clear()
                     last_stable_note = None  # MUDANÇA: reseta nota estável
 
-                time.sleep(0.1)
                 time.sleep(0.1)
 
         finally:
@@ -648,7 +763,6 @@ class VocalTestCore:
 
         else:
             # Já conseguiu a primeira nota - é o limite grave final
-            self.lowest_note = self.note_sequence[self.current_note_index]
             self.finish_test()
 
         self.is_listening = False
@@ -661,24 +775,23 @@ class VocalTestCore:
                 self.c4_skipped_as_high = True
                 self.should_descend_after_ascending = False
                 self._update_ui(
-                    status="C4 ignorado! Descendo...",
+                    status="C4 ignorado! Descendendo...",
                     status_color='#F39C12',
                     too_low_button='disabled',
                     too_high_button='disabled'
                 )
                 self.phase = 'descending'
+                # Inicia descendente a partir de B3 (conforme requisito)
                 self.current_note_index = self.note_sequence.index('B3')
             else:
-                # Continuando a descer
+                # Continua a subir/descendo conforme lógica atual
                 self._update_ui(
                     too_low_button='disabled',
                     too_high_button='disabled'
                 )
-                self.current_note_index -= 1
-        else:
-            # Já conseguiu a primeira nota - é o limite agudo final
-            self.highest_note = self.note_sequence[self.current_note_index]
+                self.current_note_index += 1
 
+        else:
             # Se começou com "Grave demais", termina aqui
             if self.c4_skipped_as_low:
                 self.finish_test()
@@ -824,33 +937,31 @@ class VocalTestCore:
 
                 duration_per_chunk = self.chunk_size / float(self.sample_rate)
 
+
                 if audio_chunk is not None and len(audio_chunk) > 0:
-                    rms = float(np.sqrt(np.mean(np.square(audio_chunk.astype(np.float64)))))
+                    rms = float(
+                    np.sqrt(np.mean(np.square(audio_chunk.astype(np.float64)))))
 
-                    if rms > self.max_amplitude:
-                        self.max_amplitude = rms if rms > 0 else self.max_amplitude
+                    # Gate de ruído para detecção de pitch
 
-                    if rms < 0.5 * max(self.max_amplitude, 1e-9):
-                        self.silence_break_time += duration_per_chunk
+                    if self.NOISE_GATE_ENABLED and rms < self.NOISE_GATE_THRESHOLD:
+                        detected_freq = None
                     else:
-                        self.silence_break_time = 0.0
+                        if rms > self.max_amplitude:
+                            self.max_amplitude = rms if rms > 0 else self.max_amplitude
+                        if rms < 0.5 * max(self.max_amplitude, 1e-9):
+                            self.silence_break_time += duration_per_chunk
+                        else:
+                            self.silence_break_time = 0.0
 
-                    if self.silence_break_time >= 0.5:
-                        self.frequency_buffer.clear()
-                        self.correct_time = 0.0
-
-                        self.silence_break_time = 0.0
-                        self._update_ui(
-                            status="Pausa de silêncio detectada. Reiniciando contagem da média...",
-                            status_color='#F39C12',
-                            time_text=f"Tempo mantendo a nota: 0.0s / 3.0s"
-                        )
-
-                detected_freq = self.detect_pitch(audio_chunk)
+                        detected_freq = self.detect_pitch(audio_chunk)
 
                 # Dentro de listen_and_detect, logo após:
                 if detected_freq is not None and detected_freq > 0:
                     self.frequency_buffer.append(detected_freq)
+
+                    # Envio imediato do pitch em Hz para a UI (para plotar)
+                    self._update_ui(pitch_hz=detected_freq)
 
                     # Novo: calcular offset em cents e enviar para a UI
                     detected_note_tmp, _ = self.frequency_to_note(detected_freq)
@@ -879,7 +990,7 @@ class VocalTestCore:
                     if is_average_correct:
                         self.correct_time += 0.1
 
-                        if self.correct_time >= 3.0:
+                        if self.correct_time >= self._testing_time:
                             self.on_note_success(current_note)
                             break
 
@@ -887,8 +998,8 @@ class VocalTestCore:
                             status=f"✓ Mantendo {current_note} (média)!",
                             status_color='#27AE60',
                             detected_note=detected_note if detected_note else "--",
-                            time_text=f"Tempo mantendo a nota: {self.correct_time:.1f}s / 3.0s",
-                            time=min(100, (self.correct_time / 3.0) * 100)
+                            time_text=f"Tempo mantendo a nota: {self.correct_time:.1f}s / {self._testing_time}.0s",
+                            time=min(100, (self.correct_time / self._testing_time) * 100)
                         )
                     else:
                         self.correct_time = 0
@@ -898,18 +1009,17 @@ class VocalTestCore:
                             detected_note=detected_note if detected_note else "--"
                         )
 
-                    progress = min(100, (self.correct_time / 3.0) * 100)
+                    progress = min(100, (self.correct_time / self._testing_time) * 100)
                 else:
                     self._update_ui(
                         status="Nenhuma nota detectada. Cante!",
                         status_color='#E74C3C',
                         detected_note="--",
                         detected_freq="-- Hz",
-                        time_text="Tempo mantendo a nota: 0.0s / 3.0s"
+                        time_text=f"Tempo mantendo a nota: 0.0s / {self._testing_time}.0s"
                     )
                     self.correct_time = 0
 
-                time.sleep(0.1)
                 time.sleep(0.1)
 
         finally:
@@ -960,7 +1070,7 @@ class VocalTestCore:
     def start_descending_phase(self):
         """Inicia a fase descendente"""
         self.phase = 'descending'
-        self.current_note_index = self.note_sequence.index(self.lowest_note)
+        self.current_note_index = self.note_sequence.index(self.lowest_note) - 1
 
         self._update_ui(
             status="Fase descendente! Preparando...",

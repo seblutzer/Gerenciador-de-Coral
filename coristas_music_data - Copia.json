@@ -1,0 +1,105 @@
+{
+  "grupos": {
+    "Grupo Vocal": {
+      "Douglas":  {
+        "range_min": "G2",
+        "range_max": "F#4",
+        "voz_calculada": "Barítono",
+        "voz_atribuida": "Barítono",
+        "vozes_recomendadas": [
+          "Barítono"
+        ],
+        "vozes_possiveis": [
+          "Tenor",
+          "Baixo"
+        ]
+      },
+      "Dalva Lutzer": {
+        "range_min": "F#3",
+        "range_max": "F5",
+        "voz_calculada": "Mezzo-soprano",
+        "voz_atribuida": "Mezzo-soprano",
+        "vozes_recomendadas": [
+          "Mezzo-soprano"
+        ],
+        "vozes_possiveis": [
+          "Contralto",
+            "Soprano"
+        ]
+      },
+      "Eduardo Lutzer": {
+        "range_min": "F2",
+        "range_max": "A4",
+        "voz_calculada": "Tenor",
+        "voz_atribuida": "Tenor",
+        "vozes_recomendadas": [
+          "Tenor",
+          "Barítono"
+        ],
+        "vozes_possiveis": [
+            "Baixo",
+            "Contralto"
+        ]
+      }
+    }
+  },
+  "musicas": {
+    "Quem de Nós": {
+      "root": "C",
+      "mode": "maior",
+      "grupo": "Grupo Vocal",
+      "ranges": {
+        "Soprano": {
+          "min": "",
+          "max": ""
+        },
+        "Mezzo-soprano": {
+          "min": "A4",
+          "max": "E6"
+        },
+        "Contralto": {
+          "min": "A4",
+          "max": "C6"
+        },
+        "Tenor": {
+          "min": "A3",
+          "max": "F4"
+        },
+        "Barítono": {
+          "min": "F3",
+          "max": "F4"
+        },
+        "Baixo": {
+          "min": "",
+          "max": ""
+        }
+      },
+      "solistas": {
+        "Eduardo Lutzer": [
+          "A4",
+          "A4"
+        ],
+        "Dalva Lutzer": [
+          "A4",
+          "A4"
+        ],
+        "Douglas": [
+          "A4",
+          "A4"
+        ]
+      },
+      "voices": {
+        "Barítono": [
+          "Douglas"
+        ],
+        "Mezzo-soprano": [
+          "Dalva Lutzer"
+        ],
+        "Tenor": [
+          "Eduardo Lutzer"
+        ]
+      },
+      "timestamp": "2026-02-05 08:49:43"
+    }
+  }
+}

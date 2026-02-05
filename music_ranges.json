@@ -1,37 +1,36 @@
 {
   "musicas": [
     {
-      "id": 1770034257,
+      "name": "Quem de Nós",
       "root": "C",
       "mode": "maior",
-      "transposition": 0,
       "ranges": {
-        "Soprano": [
-          "A4",
-          "A5"
-        ],
-        "Mezzo-soprano": [
-          "A4",
-          "A5"
-        ],
-        "Contralto": [
-          "A4",
-          "A5"
-        ],
-        "Tenor": [
-          "A4",
-          "A5"
-        ],
-        "Barítono": [
-          "A4",
-          "A5"
-        ],
-        "Baixo": [
-          "A4",
-          "A5"
-        ]
+        "Soprano": {
+          "min": "",
+          "max": ""
+        },
+        "Mezzo-soprano": {
+          "min": "A4",
+          "max": "E6"
+        },
+        "Contralto": {
+          "min": "A4",
+          "max": "C6"
+        },
+        "Tenor": {
+          "min": "A3",
+          "max": "G4"
+        },
+        "Barítono": {
+          "min": "F3",
+          "max": "F4"
+        },
+        "Baixo": {
+          "min": "G3",
+          "max": "C4"
+        }
       },
-      "timestamp": "2026-02-02 09:10:57"
+      "timestamp": "2026-02-05 04:48:40"
     }
   ]
 }

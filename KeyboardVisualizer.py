@@ -2,6 +2,55 @@ import tkinter as tk
 from tkinter import ttk
 import re
 
+
+def play_note(self, frequency, duration=2):
+    """Reproduz uma nota com envelope de piano"""
+    t = np.linspace(0, duration, int(self.sample_rate * duration), False)
+
+    # Envelope ADSR de piano
+    attack_time = 0.05  # 50ms - ataque rápido
+    decay_time = 0.3  # 300ms - decay rápido
+    sustain_level = 0.3  # nível de sustain
+    release_time = 0.3  # release suave
+
+    attack_samples = int(self.sample_rate * attack_time)
+    decay_samples = int(self.sample_rate * decay_time)
+    sustain_samples = int(self.sample_rate * (duration - attack_time - decay_time - release_time))
+    release_samples = int(self.sample_rate * release_time)
+
+    envelope = np.ones_like(t)
+
+    # Attack
+    envelope[:attack_samples] = np.linspace(0, 1, attack_samples)
+
+    # Decay
+    decay_start = attack_samples
+    decay_end = decay_start + decay_samples
+    if decay_end < len(envelope):
+        envelope[decay_start:decay_end] = np.linspace(1, sustain_level, decay_samples)
+
+    # Sustain
+    sustain_start = decay_end
+    sustain_end = sustain_start + sustain_samples
+    if sustain_end < len(envelope):
+        envelope[sustain_start:sustain_end] = sustain_level
+
+    # Release
+    release_start = sustain_end
+    if release_start < len(envelope):
+        release_samples_actual = len(envelope) - release_start
+        envelope[release_start:] = np.linspace(sustain_level, 0, release_samples_actual)
+
+    # Gera tom puro com harmônicos para simular piano
+    signal_audio = 0.25 * np.sin(2 * np.pi * frequency * t) * envelope
+
+    # Adiciona harmônicos para enriquecer o som
+    signal_audio += 0.08 * np.sin(2 * np.pi * frequency * 2 * t) * envelope
+    signal_audio += 0.04 * np.sin(2 * np.pi * frequency * 3 * t) * envelope
+
+    sd.play(signal_audio, self.sample_rate)
+    sd.wait()
+
 # ===== VISUALIZADOR DE TECLADO =====
 class KeyboardVisualizer:
     """Visualiza as notas no teclado com cores conforme o range do corista vs voz"""

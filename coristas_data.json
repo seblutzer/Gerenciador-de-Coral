@@ -1,0 +1,71 @@
+{
+  "coristas": [
+    {
+      "nome": "Douglas",
+      "range_min": "G2",
+      "range_max": "F#4",
+      "voz_calculada": "Barítono",
+      "voz_atribuida": "Barítono",
+      "vozes_recomendadas": [
+        "Barítono"
+      ],
+      "vozes_possiveis": [
+        [
+          "Tenor",
+          1,
+          "Falta 1 semitom agudo"
+        ],
+        [
+          "Baixo",
+          3,
+          "Falta 3 semitons grave"
+        ]
+      ]
+    },
+    {
+      "nome": "Dalva Lutzer",
+      "range_min": "F#3",
+      "range_max": "F5",
+      "voz_calculada": "Mezzo-soprano",
+      "voz_atribuida": "Mezzo-soprano",
+      "vozes_recomendadas": [
+        "Mezzo-soprano"
+      ],
+      "vozes_possiveis": [
+        [
+          "Contralto",
+          1,
+          "Falta 1 semitom grave"
+        ],
+        [
+          "Soprano",
+          4,
+          "Falta 4 semitons agudo"
+        ]
+      ]
+    },
+    {
+      "nome": "Eduardo Lutzer",
+      "range_min": "F2",
+      "range_max": "A4",
+      "voz_calculada": "Tenor",
+      "voz_atribuida": "Tenor",
+      "vozes_recomendadas": [
+        "Tenor",
+        "Barítono"
+      ],
+      "vozes_possiveis": [
+        [
+          "Baixo",
+          1,
+          "Falta 1 semitom grave"
+        ],
+        [
+          "Contralto",
+          5,
+          "Falta 5 semitons agudo"
+        ]
+      ]
+    }
+  ]
+}
