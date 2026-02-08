@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from GeneralFunctions import note_to_midi, midi_to_note
 from Constants import SEMITONE_TO_SHARP, VOICES, VOICE_BASE_RANGES, NOTE_TO_SEMITONE
+from CoristasManager import CoristasManager
 
 # ===== VISUALIZADOR DE RANGES =====
 class RangeVisualizer:
@@ -18,6 +19,12 @@ class RangeVisualizer:
         self.base_ranges = base_ranges or VOICE_BASE_RANGES
         self.group_ranges = None
         self.coristas = coristas or []
+        self.coristas_mgr = CoristasManager()
+
+        # Define o range de notas a exibir (C2 = 36, C6 = 84)
+        self.MIDI_MIN = 36  # C2
+        self.MIDI_MAX = 84  # C6
+        self.MIDI_RANGE = self.MIDI_MAX - self.MIDI_MIN
 
         # Frame container para o canvas
         canvas_frame = ttk.LabelFrame(master, text="Visualização de Ranges", padding=5)
@@ -27,7 +34,7 @@ class RangeVisualizer:
                                 bg="white", highlightthickness=1, highlightbackground="black")
         self.canvas.pack(fill="both", expand=True, pady=10)
 
-        self.scale = (self.CANVAS_WIDTH - self.LEFT_PAD - self.RIGHT_PAD) / 127.0
+        self.scale = (self.CANVAS_WIDTH - self.LEFT_PAD - self.RIGHT_PAD) / self.MIDI_RANGE
         self.draw_grid()
 
     def set_group_ranges(self, group_ranges):
@@ -37,20 +44,25 @@ class RangeVisualizer:
 
         self.group_ranges = group_ranges
 
-    def set_base_ranges(self, group_ranges):
-        """
-        group_ranges: dict[str, tuple[str, str]] com (min_note, max_note) por voz
-        """
-
-        self.group_ranges = VOICE_BASE_RANGES
-
     def draw_grid(self):
         for i, v in enumerate(self.voices):
             y = 10 + i * self.ROW_HEIGHT
-            self.canvas.create_line(0, y, self.CANVAS_WIDTH, y, fill="#f0f0f0")
+            self.canvas.create_line(0, y, self.CANVAS_WIDTH + 120, y, fill="#f0f0f0")
 
-        for s in range(0, 128, 12):
-            x = int(self.LEFT_PAD + s * self.scale)
+        # Offsets das notas naturais dentro de uma oitava (em semitons a partir de C)
+        natural_notes_offsets = [0, 2, 4, 5, 7, 9, 11]  # C, D, E, F, G, A, B
+
+        # Gera todos os MIDI das notas naturais no range
+        natural_midis = []
+        for octave in range(self.MIDI_MIN // 12, (self.MIDI_MAX // 12) + 2):
+            for offset in natural_notes_offsets:
+                midi = octave * 12 + offset
+                if self.MIDI_MIN <= midi <= self.MIDI_MAX:
+                    natural_midis.append(midi)
+
+        # Desenha linhas e labels apenas para notas naturais
+        for s in natural_midis:
+            x = int(self.LEFT_PAD + (s - self.MIDI_MIN) * self.scale) + 100
             self.canvas.create_line(x, 0, x, self.CANVAS_HEIGHT, fill="#e6e6e6", dash=(2, 4))
             try:
                 note = midi_to_note(s)
@@ -59,46 +71,60 @@ class RangeVisualizer:
                 pass
 
     def _x(self, midi_note):
-        return int(self.LEFT_PAD + midi_note * self.scale)
+        # Ajusta a coordenada X subtraindo MIDI_MIN
+        return int(self.LEFT_PAD + (midi_note - self.MIDI_MIN) * self.scale) + 100
 
-    def update(self, piece_ranges, T, Os):
+    def update(self, piece_ranges, T, Os, group_ranges=None, group_extension=None, voice_scores=None):
         self.canvas.delete("all")
         self.draw_grid()
 
-        for idx, v in enumerate([voice for voice in self.voices if voice in self.group_ranges] if self.group_ranges else self.voices):
+        for idx, v in enumerate(group_ranges if group_ranges else self.voices):
             y = 30 + idx * self.ROW_HEIGHT
-
-            base_min_m = note_to_midi(self.base_ranges[v][0])
-            base_max_m = note_to_midi(self.base_ranges[v][1])
-
             bar_y = y - 10 + (self.ROW_HEIGHT - self.BAR_HEIGHT) / 2
 
-            x1 = self._x(base_min_m)
-            x2 = self._x(base_max_m)
-
-            # Se houver range de grupo para esta voz, desenhe duas barras:
-            # - uma externa (base) com transparência
-            # - uma interna (grupo) sem transparência
-
-            if self.group_ranges and v in self.group_ranges:
-                g_min_m = note_to_midi(self.group_ranges[v][0])
-                g_max_m = note_to_midi(self.group_ranges[v][1])
-
-                # Barreira externa (base) com transparência (simulada via stipple)
-                self.canvas.create_rectangle(x1, bar_y, x2, bar_y + self.BAR_HEIGHT,
-                                             fill="#90ee90", outline="#2e8b57", stipple="gray50")
-                # Bar interna (grupo) sem transparência
-                gx1 = self._x(g_min_m)
-                gx2 = self._x(g_max_m)
-                self.canvas.create_rectangle(gx1, bar_y, gx2, bar_y + self.BAR_HEIGHT,
-                                             fill="#90ee90", outline="#2e8b57")
+            # Determinar o range base para validação de transposição
+            if group_ranges:
+                g_min_m = note_to_midi(group_ranges[v][0])
+                g_max_m = note_to_midi(group_ranges[v][1])
             else:
                 g_min_m = note_to_midi(VOICE_BASE_RANGES[v][0])
                 g_max_m = note_to_midi(VOICE_BASE_RANGES[v][1])
 
-                self.canvas.create_rectangle(x1, bar_y, x2, bar_y + self.BAR_HEIGHT,
-                                             fill="#90ee90", outline="#2e8b57")
+            # Desenhar barras de grupo se existirem
+            if group_ranges is not None and group_extension is not None:
+                # Desenhar barra de group_extension (com opacidade 50%) se aplicável
+                if v in group_extension and v in group_ranges:
+                    # Só desenha group_extension se tem valores diferentes de group_ranges
+                    if group_extension[v] != group_ranges[v]:
+                        ext_min_m = note_to_midi(group_extension[v][0])
+                        ext_max_m = note_to_midi(group_extension[v][1])
+                        ext_x1 = self._x(ext_min_m)
+                        ext_x2 = self._x(ext_max_m)
 
+                        # Desenha com opacidade 50% (usando stipple)
+                        self.canvas.create_rectangle(ext_x1, bar_y, ext_x2, bar_y + self.BAR_HEIGHT,
+                                                     fill="#4169E1", outline="#000080", stipple="gray50")
+
+                # Desenhar barra de group_ranges (sólida)
+                if v in group_ranges:
+                    gr_min_m = note_to_midi(group_ranges[v][0])
+                    gr_max_m = note_to_midi(group_ranges[v][1])
+                    gr_x1 = self._x(gr_min_m)
+                    gr_x2 = self._x(gr_max_m)
+
+                    self.canvas.create_rectangle(gr_x1, bar_y, gr_x2, bar_y + self.BAR_HEIGHT,
+                                                 fill="#4169E1", outline="#000080")
+            else:
+                # Comportamento padrão quando não há group_ranges/group_extension
+                base_min_m = note_to_midi(VOICE_BASE_RANGES[v][0])
+                base_max_m = note_to_midi(VOICE_BASE_RANGES[v][1])
+                x1 = self._x(base_min_m)
+                x2 = self._x(base_max_m)
+                # fill = "#90ee90", outline = "#2e8b57"
+                self.canvas.create_rectangle(x1, bar_y, x2, bar_y + self.BAR_HEIGHT,
+                                             fill="#4169E1", outline="#000080")
+
+            # Resto da lógica (piece_ranges e transposição)
             if v in {k: y for k, y in piece_ranges.items() if y != ('', '')}:
                 piece_min_str, piece_max_str = piece_ranges[v]
                 piece_min_m = note_to_midi(piece_min_str)
@@ -145,13 +171,24 @@ class RangeVisualizer:
                 tx1 = self._x(trans_min)
                 tx2 = self._x(trans_max)
 
-                red_thick = int(self.BAR_HEIGHT * 0.8)
+                red_thick = int(self.BAR_HEIGHT * 0.5)
                 red_top = bar_y + (self.BAR_HEIGHT - red_thick) / 2
                 red_bottom = red_top + red_thick
                 self.canvas.create_rectangle(tx1, red_top, tx2, red_bottom,
-                                             fill="#ff7f7f", outline="#c11b1b", stipple="gray50")
+                                             fill="#f7a40a", outline="#6e4b0b")
+
+                # Exibir score no meio do retângulo red_thick
+                if voice_scores and v in voice_scores and T in voice_scores[v]:
+                    score_value = voice_scores[v][T]
+                    score_text = f"{score_value:.2f}"
+
+                    # Centralizar o texto no retângulo
+                    text_x = (tx1 + tx2) / 2
+                    text_y = (red_top + red_bottom) / 2
+
+                    self.canvas.create_text(text_x, text_y, text=score_text,
+                                            font=("Arial", 9, "bold"), fill="#FFFFFF")
 
             self.canvas.create_text(5, y + 6, anchor="w", text=v, font=("Arial", 10, "bold"))
 
         self.master.update_idletasks()
-
