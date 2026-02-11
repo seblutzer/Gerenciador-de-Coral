@@ -1,19 +1,6 @@
 {
   "grupos": {
     "Grupo Vocal": {
-      "Dalva Lutzer": {
-        "range_min": "F#3",
-        "range_max": "F5",
-        "voz_calculada": "Mezzo-soprano",
-        "voz_atribuida": "Mezzo-soprano",
-        "vozes_recomendadas": [
-          "Mezzo-soprano"
-        ],
-        "vozes_possiveis": [
-          "Contralto",
-          "Soprano"
-        ]
-      },
       "Eduardo Lutzer": {
         "range_min": "F2",
         "range_max": "A4",
@@ -25,18 +12,6 @@
         ],
         "vozes_possiveis": [
           "Baixo",
-          "Contralto"
-        ]
-      },
-      "Menininha": {
-        "range_min": "G3",
-        "range_max": "E5",
-        "voz_calculada": "Mezzo-soprano",
-        "voz_atribuida": "Mezzo-soprano",
-        "vozes_recomendadas": [],
-        "vozes_possiveis": [
-          "Mezzo-soprano",
-          "Soprano",
           "Contralto"
         ]
       },
@@ -103,19 +78,6 @@
           "Contralto"
         ]
       },
-      "Kátia Vanessa": {
-        "range_min": "A3",
-        "range_max": "G5",
-        "voz_calculada": "Mezzo-soprano",
-        "voz_atribuida": "Mezzo-soprano",
-        "vozes_recomendadas": [
-          "Mezzo-soprano"
-        ],
-        "vozes_possiveis": [
-          "Soprano",
-          "Contralto"
-        ]
-      },
       "Samuel Dorta": {
         "range_min": "D2",
         "range_max": "C4",
@@ -132,13 +94,78 @@
         "range_min": "E2",
         "range_max": "D4",
         "voz_calculada": "Baixo",
-        "voz_atribuida": "Tenor",
+        "voz_atribuida": "Barítono",
         "vozes_recomendadas": [
           "Baixo"
         ],
         "vozes_possiveis": [
           "Barítono",
           "Tenor"
+        ]
+      },
+      "Kátia Vanessa": {
+        "range_min": "A3",
+        "range_max": "G5",
+        "voz_calculada": "Mezzo-soprano",
+        "voz_atribuida": "Soprano",
+        "vozes_recomendadas": [
+          "Mezzo-soprano"
+        ],
+        "vozes_possiveis": [
+          "Soprano",
+          "Contralto"
+        ]
+      },
+      "Paloma": {
+        "range_min": "G3",
+        "range_max": "E5",
+        "voz_calculada": "M",
+        "voz_atribuida": "Soprano",
+        "vozes_recomendadas": [],
+        "vozes_possiveis": [
+          "Mezzo-soprano",
+          "Soprano",
+          "Contralto"
+        ]
+      },
+      "Dalva Lutzer": {
+        "range_min": "F3",
+        "range_max": "F5",
+        "voz_calculada": "Mezzo-soprano",
+        "voz_atribuida": "Mezzo-soprano",
+        "vozes_recomendadas": [
+          "Mezzo-soprano",
+          "Contralto"
+        ],
+        "vozes_possiveis": [
+          "Tenor",
+          "Soprano"
+        ]
+      },
+      "Tester": {
+        "range_min": "G2",
+        "range_max": "F#4",
+        "voz_calculada": "Barítono",
+        "voz_atribuida": "Barítono",
+        "vozes_recomendadas": [
+          "Barítono"
+        ],
+        "vozes_possiveis": [
+          "Baixo",
+          "Tenor"
+        ]
+      },
+      "Noraml": {
+        "range_min": "F2",
+        "range_max": "G4",
+        "voz_calculada": "Tenor",
+        "voz_atribuida": "Tenor",
+        "vozes_recomendadas": [
+          "Tenor",
+          "Barítono"
+        ],
+        "vozes_possiveis": [
+          "Baixo"
         ]
       }
     },
@@ -178,10 +205,6 @@
       "mode": "maior",
       "grupo": "Grupo Vocal",
       "ranges": {
-        "Soprano": {
-          "min": "",
-          "max": ""
-        },
         "Mezzo-soprano": {
           "min": "A4",
           "max": "C6"
@@ -192,15 +215,11 @@
         },
         "Tenor": {
           "min": "A3",
-          "max": "F4"
+          "max": "G4"
         },
         "Barítono": {
           "min": "F3",
           "max": "F4"
-        },
-        "Baixo": {
-          "min": "",
-          "max": ""
         }
       },
       "solistas": {
@@ -208,66 +227,52 @@
           "A4",
           "A5"
         ],
-        "Dalva Lutzer": [
+        "Douglas Madoks": [
           "A4",
           "A5"
         ],
-        "Douglas Madoks": [
+        "Dalva Lutzer": [
           "A4",
           "A5"
         ]
       },
       "voices": {
-        "Mezzo-soprano": [
-          "Dalva Lutzer",
-          "Menininha",
-          "Kátia Vanessa"
-        ],
         "Tenor": [
           "Eduardo Lutzer",
           "Douglas Madoks",
-          "Willian Modro"
+          "Willian Modro",
+          "Noraml"
         ],
         "Barítono": [
           "João Pedro",
-          "Samuel Dorta"
+          "Samuel Dorta",
+          "Tester"
         ],
         "Contralto": [
           "Manu Laurindo",
           "Elisângela Modro",
           "Georgia"
+        ],
+        "Mezzo-soprano": [
+          "Kátia Vanessa",
+          "Paloma",
+          "Dalva Lutzer"
         ]
       },
-      "timestamp": "2026-02-08 10:37:53"
+      "timestamp": "2026-02-10 12:28:12"
     },
     "Fernando Iglesias - O Deus que eu Conheço": {
       "root": "C",
       "mode": "maior",
       "grupo": "Eduardo e Dalva",
       "ranges": {
-        "Soprano": {
-          "min": "",
-          "max": ""
-        },
         "Mezzo-soprano": {
           "min": "C4",
           "max": "F5"
         },
-        "Contralto": {
-          "min": "",
-          "max": ""
-        },
         "Tenor": {
-          "min": "C4",
-          "max": "F5"
-        },
-        "Barítono": {
-          "min": "",
-          "max": ""
-        },
-        "Baixo": {
-          "min": "",
-          "max": ""
+          "min": "C3",
+          "max": "F4"
         }
       },
       "solistas": {},
@@ -279,7 +284,7 @@
           "Dalva Lutzer"
         ]
       },
-      "timestamp": "2026-02-07 08:07:47"
+      "timestamp": "2026-02-09 14:51:59"
     },
     "Fernando Iglesias - Será que o Céu Sabia?": {
       "root": "G",
@@ -366,7 +371,7 @@
         ],
         "Mezzo-soprano": [
           "Dalva Lutzer",
-          "Menininha",
+          "Paloma",
           "Kátia Vanessa"
         ],
         "Tenor": [
@@ -405,27 +410,31 @@
       },
       "solistas": {},
       "voices": {
-        "Mezzo-soprano": [
-          "Dalva Lutzer",
-          "Menininha",
-          "Kátia Vanessa"
-        ],
         "Tenor": [
           "Eduardo Lutzer",
-          "Douglas Madoks"
+          "Douglas Madoks",
+          "Noraml"
         ],
         "Baixo": [
           "João Pedro",
-          "Willian Modro",
-          "Samuel Dorta"
+          "Samuel Dorta",
+          "Willian Modro"
         ],
         "Contralto": [
           "Manu Laurindo",
           "Elisângela Modro",
           "Georgia"
+        ],
+        "Mezzo-soprano": [
+          "Kátia Vanessa",
+          "Paloma",
+          "Dalva Lutzer"
+        ],
+        "Barítono": [
+          "Tester"
         ]
       },
-      "timestamp": "2026-02-08 15:42:56"
+      "timestamp": "2026-02-10 05:35:35"
     },
     "Presente Lá do Céu": {
       "root": "Db",
@@ -450,7 +459,7 @@
         }
       },
       "solistas": {
-        "Menininha": [
+        "Paloma": [
           "F4",
           "Ab4"
         ]
@@ -458,7 +467,7 @@
       "voices": {
         "Mezzo-soprano": [
           "Dalva Lutzer",
-          "Menininha",
+          "Paloma",
           "Kátia Vanessa"
         ],
         "Tenor": [
@@ -477,6 +486,57 @@
         ]
       },
       "timestamp": "2026-02-08 17:12:35"
+    },
+    "Digno é o Cordeiro": {
+      "root": "A",
+      "mode": "maior",
+      "grupo": "Grupo Vocal",
+      "ranges": {
+        "Soprano": {
+          "min": "F3",
+          "max": "C5"
+        },
+        "Contralto": {
+          "min": "F3",
+          "max": "G4"
+        },
+        "Tenor": {
+          "min": "F3",
+          "max": "F4"
+        },
+        "Barítono": {
+          "min": "G2",
+          "max": "D4"
+        }
+      },
+      "solistas": {
+        "Dalva Lutzer": [
+          "F3",
+          "C5"
+        ]
+      },
+      "voices": {
+        "Tenor": [
+          "Eduardo Lutzer",
+          "Douglas Madoks"
+        ],
+        "Barítono": [
+          "João Pedro",
+          "Samuel Dorta",
+          "Willian Modro"
+        ],
+        "Contralto": [
+          "Manu Laurindo",
+          "Elisângela Modro",
+          "Georgia"
+        ],
+        "Soprano": [
+          "Dalva Lutzer",
+          "Paloma",
+          "Kátia Vanessa"
+        ]
+      },
+      "timestamp": "2026-02-09 15:27:04"
     }
   }
 }

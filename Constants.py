@@ -43,5 +43,5 @@ SEMITONE_TO_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#',
 
 SEMITONE_TO_BEMOL = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
 
-#DATA_FILE = "coristas_music_data.json"
-DATA_FILE = "C:\Users\Sérgio\PycharmProjects\Gerenciador de Coral\coristas_music_data.json"
+DATA_FILE = "coristas_music_data.json"
+#DATA_FILE = "C:\Users\Sérgio\PycharmProjects\Gerenciador de Coral\coristas_music_data.json"
