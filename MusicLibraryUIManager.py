@@ -6,16 +6,17 @@ Responsabilidades:
 - Processar arquivos de áudio das vozes
 - Sincronizar UI com dados de música
 """
-
+import json
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, simpledialog
 import os
-import shutil
 from pathlib import Path
 from Constants import VOICES
+import re
 
 
 class MusicLibraryUIManager:
+
     def __init__(self, parent_frame, coristas_mgr, music_data_mgr, analyzer):
         """
         Args:
@@ -42,6 +43,8 @@ class MusicLibraryUIManager:
 
         # Widgets de vozes
         self.voice_vars = {}  # {voz: {"min": Entry, "max": Entry}}
+        self.music_dir = None
+        self.music_name = None
 
         # Solistas
         self.solist_frame = None
@@ -49,7 +52,8 @@ class MusicLibraryUIManager:
         self.solist_rows = []  # Lista de dicts com widgets dos solistas
         self.solist_count = 0
 
-    def create_music_name_field(self, parent):
+    def create_music_name_field(self,
+                                parent):
         """Cria o campo de nome da música com placeholder."""
         self.music_name_entry = tk.Entry(
             parent,
@@ -78,7 +82,8 @@ class MusicLibraryUIManager:
 
         return self.music_name_entry
 
-    def create_music_selector(self, parent, on_select_callback):
+    def create_music_selector(self,
+                              parent, on_select_callback):
         """Cria o combobox de seleção de música."""
         self.music_combo = ttk.Combobox(
             parent,
@@ -93,7 +98,8 @@ class MusicLibraryUIManager:
         )
         return self.music_combo
 
-    def create_root_selector(self, parent, on_select_callback):
+    def create_root_selector(self,
+                             parent, on_select_callback):
         """Cria o combobox de seleção de tom."""
         self.root_combo = ttk.Combobox(
             parent,
@@ -107,7 +113,8 @@ class MusicLibraryUIManager:
         self.root_combo.bind("<<ComboboxSelected>>", on_select_callback)
         return self.root_combo
 
-    def create_mode_selector(self, parent, on_select_callback):
+    def create_mode_selector(self,
+                             parent, on_select_callback):
         """Cria o combobox de seleção de modo."""
         self.mode_combo = ttk.Combobox(
             parent,
@@ -120,7 +127,8 @@ class MusicLibraryUIManager:
         self.mode_combo.bind("<<ComboboxSelected>>", on_select_callback)
         return self.mode_combo
 
-    def create_voice_range_entries(self, parent):
+    def create_voice_range_entries(self,
+                                   parent):
         """Cria os campos de entrada de ranges por voz."""
         for idx, v in enumerate(VOICES):
             row = idx // 2
@@ -140,7 +148,8 @@ class MusicLibraryUIManager:
 
             self.voice_vars[v] = {"min": min_entry, "max": max_entry}
 
-    def create_solists_ui(self, parent):
+    def create_solists_ui(self,
+                          parent):
         """Cria a UI de solistas com combobox de contagem."""
         self.solist_count_cb = ttk.Combobox(
             parent,
@@ -155,11 +164,13 @@ class MusicLibraryUIManager:
         self.solist_frame = ttk.Frame(parent, padding=10)
         self.solist_frame.pack()
 
-    def _on_solists_count_changed(self, event=None):
+    def _on_solists_count_changed(self,
+                                  event=None):
         """Atualiza a UI de solistas baseado no número selecionado."""
         self._build_solists_ui()
 
-    def _build_solists_ui(self):
+    def _build_solists_ui(self
+                          ):
         """Constrói/Atualiza a UI para os solistas."""
         for child in self.solist_frame.winfo_children():
             child.destroy()
@@ -193,7 +204,8 @@ class MusicLibraryUIManager:
                 "max": max_ent,
             })
 
-    def get_voice_ranges(self, solistas=None):
+    def get_voice_ranges(self,
+                         solistas=None):
         """
         Retorna os ranges de vozes da UI.
 
@@ -210,11 +222,13 @@ class MusicLibraryUIManager:
 
         return ranges
 
-    def eraser_voice_ranges(self):
+    def eraser_voice_ranges(self
+                            ):
         for v, vr in self.voice_vars.items():
             [valor.delete(0, "end") for valor in vr.values()]
 
-    def set_voice_ranges(self, ranges):
+    def set_voice_ranges(self,
+                         ranges):
         """
         Preenche os campos de ranges de vozes.
 
@@ -240,7 +254,8 @@ class MusicLibraryUIManager:
                 self.voice_vars[voice]["max"].delete(0, "end")
                 self.voice_vars[voice]["max"].insert(0, max_val)
 
-    def get_solistas(self):
+    def get_solistas(self
+                     ):
         """
         Retorna os solistas da UI.
 
@@ -268,7 +283,8 @@ class MusicLibraryUIManager:
 
         return solistas
 
-    def set_solistas(self, solistas):
+    def set_solistas(self,
+                     solistas):
         """
         Preenche os campos de solistas.
 
@@ -301,7 +317,8 @@ class MusicLibraryUIManager:
                 row["max"].delete(0, "end")
                 row["max"].insert(0, solistas[name][1])
 
-    def clear_all_fields(self):
+    def clear_all_fields(self
+                         ):
         """Limpa todos os campos da UI de música."""
         # Limpa ranges de vozes
         for voice, vr in self.voice_vars.items():
@@ -315,96 +332,215 @@ class MusicLibraryUIManager:
             self.music_name_entry.insert(0, self.music_name_placeholder)
             self.music_name_entry.config(fg="grey")
 
+        self.music_combo.set("-- Selecione uma música --")
+        #self.root_var.set('C')
+        self.root_combo.set('C')
+        #self.mode_var.set('maior')
+        self.mode_combo.set('maior')
         # Limpa solistas
         if self.solist_count_cb:
             self.solist_count_cb.set(0)
             self._build_solists_ui()
 
-    def load_voice_audio_files(self):
+    def load_voice_audio_files(self
+                               ):
         """
         Carrega arquivos de áudio para cada voz e processa.
 
         Returns:
             (sucesso: bool, mensagem: str)
         """
-        voice_audio_paths = {}
-        for v in VOICES:
+        import shutil  # se ainda não estiver importado no seu arquivo
+        # Abre o diálogo com as 3 opções
+        root = self.master if hasattr(self, "master") else None  # ajuste conforme seu código
+        mode_dialog = FileOpenModeDialog(root, title="Tipo de arquivo para abrir")
+        mode = getattr(mode_dialog, "result", "Vozes")
+
+        if mode == "Vozes":
+            # Fluxo original (tenta abrir um arquivo para cada VOZ)
+            voice_audio_paths = {}
+            for v in VOICES:
+                path = filedialog.askopenfilename(
+                    title=f"Selecione áudio para a voz {v}",
+                    filetypes=[("Audio", "*.wav *.mp3 *.flac"), ("All files", "*.*")]
+                )
+                if path:
+                    voice_audio_paths[v] = path
+                else:
+                    voice_audio_paths[v] = None
+
+            # Bloco restante igual ao original, unido pela helper
+            ok, msg = self._process_voice_paths(voice_audio_paths)
+            return ok, msg, 'voz_teste'
+
+        elif mode == "Única Voz":
+            # Escolha da voz única
+            voice_dialog = VoiceSelectorDialog(root, title="Selecione a voz para único arquivo", voices=VOICES)
+            voice = getattr(voice_dialog, "result", None)
+            if not voice:
+                return False, "Nenhuma voz selecionada"
+
             path = filedialog.askopenfilename(
-                title=f"Selecione áudio para a voz {v}",
+                title=f"Selecione áudio para a voz {voice}",
                 filetypes=[("Audio", "*.wav *.mp3 *.flac"), ("All files", "*.*")]
             )
-            if path:
-                voice_audio_paths[v] = path
-            else:
-                voice_audio_paths[v] = None
+            if not path:
+                return False, "Arquivo não selecionado"
 
-        # Determina nome da música
-        music_name = self.music_name_var.get().strip()
-        if not music_name or music_name == self.music_name_placeholder:
+            # Monta o dict com apenas essa voz preenchida
+            voice_audio_paths = {v: None for v in VOICES}
+            voice_audio_paths[voice] = path
+
+            ok, msg = self._process_voice_paths(voice_audio_paths)
+            return ok, msg, voice
+
+        elif mode == "json":
+            # Placeholder para o fluxo ainda não implementado
+            # Escolha da voz única
+            voice_dialog = VoiceSelectorDialog(root, title="Selecione o arquivo de voz", voices=VOICES)
+            voice = getattr(voice_dialog, "result", None)
+            if not voice:
+                return False, "Nenhuma voz selecionada"
+
+            path = filedialog.askopenfilename(
+                title=f"Selecione áudio para a voz {voice}",
+                filetypes=[("Json", "*.json"), ("All files", "*.*")]
+            )
+            #[{'time': 0.0, 'freq': 193.42348771730548, 'note': 'G3'}, {'time': 0.05655384063720703, 'freq': 291.6882355949923, 'note': 'D4'},
+            with open(path, 'r', encoding='utf-8') as f:
+                raw_log = json.load(f)
+
+            return raw_log, '', voice
+
+        else:
+            return False, "Modo desconhecido"
+
+    def extract_music_name(self,
+                           music_name, voice_audio_paths):
+        """
+        Remove o nome da voz e travessões adjacentes do nome da música.
+
+        Args:
+            music_name: Nome base da música
+            voice_audio_paths: Dict com {voice: "path", ...}
+
+        Returns:
+            String com o nome da música limpo
+        """
+        if not music_name:
+            return music_name
+
+        # Criar padrão regex case-insensitive para todas as vozes
+        # Ordena por tamanho descendente para evitar matches parciais
+        voices = sorted(voice_audio_paths.keys(), key=len, reverse=True)
+
+        # Escape special regex characters e cria padrão
+        pattern = '|'.join(re.escape(voice) for voice in voices)
+
+        # Regex que remove: [travessão opcional] + voz + [travessão opcional]
+        # \s* permite espaços em branco, [\-_–—] é qualquer tipo de travessão
+        cleaned = re.sub(
+            rf'\s*[\-_–—]?\s*({pattern})\s*[\-_–—]?\s*',
+            ' ',
+            music_name,
+            flags=re.IGNORECASE
+        )
+
+        # Remove espaços extras deixados pela substituição
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+
+        return cleaned if cleaned else music_name
+
+    # Helper: executa o processamento com base no dict voz -> path
+    def _process_voice_paths(self,
+                             voice_audio_paths):
+        # Copia do bloco original que processa cada voz
+        self.music_name = self.music_name_var.get().strip()
+
+        if not self.music_name or self.music_name == self.music_name_placeholder:
             # Deriva do primeiro caminho
-            for p in voice_audio_paths.values():
-                if p:
-                    base = os.path.basename(p)
-                    music_name = os.path.splitext(base)[0]
+            for voice, path in voice_audio_paths.items():
+                if path:
+                    base = os.path.basename(path)
+                    self.music_name = os.path.splitext(base)[0]
                     break
 
-        if not music_name:
+            # Processa para remover nome da voz e travessões adjacentes
+            self.music_name = self.extract_music_name(self.music_name, voice_audio_paths)
+
+        if not self.music_name:
             return False, "Nome da música não informado nem derivável"
 
         # Processa cada faixa
         root_musicas = Path("root") / "Musicas"
-        music_root = root_musicas / music_name
+        music_root = root_musicas / self.music_name
 
         for voz, path in voice_audio_paths.items():
             if not path:
                 continue
 
             # Processa com AudioAnalyzer
-            result = self.analyzer.process_music(path, music_name)
-
-            # Preenche ranges
-            extrema = result.get("extrema")
-            if extrema and len(extrema) >= 2:
-                min_name, max_name = extrema[0], extrema[1]
-                if voz in self.voice_vars:
-                    self.voice_vars[voz]["min"].delete(0, "end")
-                    self.voice_vars[voz]["min"].insert(0, min_name)
-                    self.voice_vars[voz]["max"].delete(0, "end")
-                    self.voice_vars[voz]["max"].insert(0, max_name)
+            result = self.analyzer._analyze_mp3_to_notes(str(path))
 
             # Salva outputs
             voice_dir = music_root / voz
             voice_dir.mkdir(parents=True, exist_ok=True)
 
-            notes_src = result.get("notes_detected_path")
-            normalized_src = result.get("normalized_path")
-            midi_src = result.get("midi_path")
+            # 4) Preparar diretório de saída
+            self.music_dir = self.analyzer.root_dir / self.music_name
+            self.music_dir.mkdir(parents=True, exist_ok=True)
 
-            if notes_src:
-                dest_notes = voice_dir / f"{music_name}_notes_detected.json"
-                try:
-                    shutil.copy2(notes_src, dest_notes)
-                except Exception as e:
-                    print(f"Aviso: não foi possível copiar notes para {dest_notes}: {e}")
+            # 5) Salvar outputs
+            notes_path = self.music_dir / f"{self.music_name}_notes - {voz}.json"
+            with open(notes_path, 'w', encoding='utf-8') as f:
+                json.dump(result, f, indent=2, ensure_ascii=False)
 
-            if normalized_src:
-                dest_normalized = voice_dir / f"{music_name}_normalized.json"
-                try:
-                    shutil.copy2(normalized_src, dest_normalized)
-                except Exception as e:
-                    print(f"Aviso: não foi possível copiar normalized para {dest_normalized}: {e}")
+        return result, f"Processamento concluído para '{self.music_name}'"
 
-            if midi_src:
-                dest_midi = voice_dir / f"{music_name}_midi.mid"
-                try:
-                    shutil.copy2(midi_src, dest_midi)
-                except Exception as e:
-                    print(f"Aviso: não foi possível copiar MIDI para {dest_midi}: {e}")
-
-        return True, f"Processamento concluído para '{music_name}'"
-
-    def update_music_library(self, grupo=None):
+    def update_music_library(self,
+                             grupo=None):
         """Atualiza a lista de músicas no combobox."""
         music_names, _ = self.music_data_mgr.load_music_library(grupo)
         if self.music_combo:
             self.music_combo['values'] = music_names
+
+class FileOpenModeDialog(simpledialog.Dialog):
+    def __init__(self,
+                 parent, title=None, options=("Vozes", "Única Voz", "json")):
+        self.options = options
+        self.selected = options[0]
+        super().__init__(parent, title)
+
+    def body(self,
+             master):
+        tk.Label(master, text="Selecione o tipo de arquivo a abrir:").grid(row=0, column=0, sticky="w")
+        self.var = tk.StringVar(value=self.options[0])
+        for idx, opt in enumerate(self.options):
+            tk.Radiobutton(master, text=opt, variable=self.var, value=opt).grid(row=idx+1, column=0, sticky="w")
+        return None
+
+    def apply(self
+              ):
+        self.selected = self.var.get()
+        self.result = self.selected
+
+# Dialog para escolher qual voz usar (quando "Única Voz" é escolhido)
+class VoiceSelectorDialog(simpledialog.Dialog):
+    def __init__(self, parent, title="Selecione voz", voices=None):
+        self.voices = voices or []
+        self.selected_voice = None
+        super().__init__(parent, title)
+
+    def body(self,
+             master):
+        tk.Label(master, text="Selecione a voz:").grid(row=0, column=0, sticky="w")
+        self.var = tk.StringVar()
+        for i, v in enumerate(self.voices):
+            tk.Radiobutton(master, text=v, variable=self.var, value=v).grid(row=i+1, column=0, sticky="w")
+        return None
+
+    def apply(self
+              ):
+        self.selected_voice = self.var.get()
+        self.result = self.selected_voice
+

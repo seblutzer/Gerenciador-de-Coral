@@ -1,11 +1,13 @@
-import math
-import re
-from typing import Dict, Optional, Any
-from Constants import SEMITONE_TO_SHARP, SEMITONE_TO_BEMOL, NOTE_TO_SEMITONE, VOICES, VOICE_BASE_RANGES
+from Constants import SEMITONE_TO_SHARP, SEMITONE_TO_BEMOL, NOTE_TO_SEMITONE
+import numpy as np
+import sounddevice as sd
+import threading
+import librosa
 
 # ===== FUNÇÕES DE NOTA =====
 # Função para transpor uma nota
-def transpose_note(note, semitones):
+def transpose_note(note,
+                   semitones):
     """Transpõe uma nota musical por um número de semitons"""
     try:
         index = SEMITONE_TO_SHARP.index(note)
@@ -15,7 +17,8 @@ def transpose_note(note, semitones):
     return SEMITONE_TO_SHARP[transposed_index]
 
 
-def transpose_key(root_name: str, mode: str, semitones: int) -> (str, str):
+def transpose_key(root_name: str,
+                  mode: str, semitones: int) -> (str, str):
     root = root_name.strip().capitalize()
     if root not in NOTE_TO_SEMITONE:
         root = root_name.strip().replace('b', 'b').replace('#', '#')
@@ -26,356 +29,123 @@ def transpose_key(root_name: str, mode: str, semitones: int) -> (str, str):
     new_root = SEMITONE_TO_SHARP[new_pc]
     return new_root, mode
 
-def midi_to_note(n: int) -> str:
-    if not (0 <= n <= 127):
-        raise ValueError(f"MIDI fora do range: {n}")
-    octave = (n // 12) - 1
-    semitone = n % 12
-    return f"{SEMITONE_TO_SHARP[semitone]}{octave}"
+# ===== FUNÇÕES DE PARSING E CONVERSÃO DE NOTAS =====
 
-def note_to_midi(note_str: str) -> int:
-    s = note_str.strip().replace(' ', '')
-    m = re.match(r'^([A-Ga-g])([#b]?)(-?\d+)$', s)
-    if not m:
-        return
-        #raise ValueError(f"Nota inválida: '{note_str}'")
-    note = m.group(1).upper()
-    acc = m.group(2)
-    octa = int(m.group(3))
-
-    key = f"{note}{acc}" if acc else note
-    if key not in NOTE_TO_SEMITONE:
-        if acc:
-            key = note
-        if key not in NOTE_TO_SEMITONE:
-            raise ValueError(f"Nota inválida: '{note_str}'")
-
-    semitone = NOTE_TO_SEMITONE[key]
-    midi = 12 * (octa + 1) + semitone
-    if midi < 0 or midi > 127:
-        raise ValueError(f"Nota fora do range MIDI (0-127): '{note_str}'")
-    return midi
-
-# ===== ANÁLISE DE RANGES =====
-def compute_per_voice_Os_for_T(T: int,
-                             piece_ranges: Dict[str, tuple],
-                             group_ranges: Optional[Dict[str, tuple]] = None) -> Dict[str, int]:
+def parse_note(note
+               ):
     """
-    Calcula, para uma transposição T dada, os O_i para cada voz.
-    Usa a regra de penalidade semelhante à usada em on_t_change.
+    Retorna (nome_nota, oitava) de uma string como 'C#4'
+
+    Args:
+        note: String representando a nota (ex: 'C#4', 'Bb3', 'G2')
+
+    Returns:
+        tuple: (nome_nota, oitava) - ex: ('C#', 4)
     """
-    # Vozes consideradas
-    voices = list({k: v for k, v in piece_ranges.items() if v != ('', '')}.keys()) if not group_ranges else list(group_ranges.keys())
+    i = 0
+    while i < len(note) and not note[i].isdigit():
+        i += 1
+    note_name = note[:i]
+    octave = int(note[i:])
+    return (note_name, octave)
 
-    if group_ranges is None:
-        group_ranges = VOICE_BASE_RANGES
-
-    per_voice_Os: Dict[str, int] = {}
-
-    for v in voices:
-        if v not in piece_ranges or piece_ranges[v] == ('', ''):
-            continue
-
-        mn = note_to_midi(piece_ranges[v][0])
-        mx = note_to_midi(piece_ranges[v][1])
-
-        # Faixa da voz (grupo/base)
-        if v in group_ranges:
-            g_min = note_to_midi(group_ranges[v][0])
-            g_max = note_to_midi(group_ranges[v][1])
-        else:
-            g_min = note_to_midi(VOICE_BASE_RANGES[v][0])
-            g_max = note_to_midi(VOICE_BASE_RANGES[v][1])
-
-        best_O = None
-        best_pen = float('inf')
-
-        for O in range(-4, 5):
-            low = mn + T + 12 * O
-            high = mx + T + 12 * O
-
-            pen = max(0, g_min - low) + max(0, high - g_max)
-
-            if pen < best_pen or (pen == best_pen and (best_O is None or abs(O) < abs(best_O))):
-                best_O = O
-                best_pen = pen
-
-        per_voice_Os[v] = best_O
-
-    return per_voice_Os
-
-
-def analyze_ranges_with_penalty(original_root: str,
-                                original_mode: str,
-                                piece_ranges: Dict[str, tuple],
-                                group_ranges: Optional[Dict[str, tuple]] = None) -> Dict[str, Any]:
+def is_black_key(note
+                 ):
     """
-    Análise com pontuação para encontrar o melhor T usando o esquema descrito.
-    Retorna um dict com:
-      - best_T
-      - best_Os (offsets por voz)
-      - best_key_root, best_key_mode
-      - voice_scores: dicionário com {voice: {T: score}} para todas as transposições
-      - debug (ranking de Ts para debug)
+    Retorna True se a nota é uma tecla preta
+
+    Args:
+        note: String representando a nota
+
+    Returns:
+        bool: True se for tecla preta (sustenido ou bemol)
     """
-    voices = list({k: v for k, v in piece_ranges.items() if v != ('', '')}.keys()) if group_ranges is None else list(
-        group_ranges.keys())
+    note_name = parse_note(note)[0]
+    return '#' in note_name or 'b' in note_name
 
-    if group_ranges is None:
-        group_ranges = VOICE_BASE_RANGES
 
-    # Mapear ranges por voz, com fallback para valores padrão se ausentes
-    piece_mins = {}
-    piece_maxs = {}
-    for v in voices:
-        if v in piece_ranges:
-            mn, mx = piece_ranges[v]
-            piece_mins[v] = note_to_midi(mn)
-            piece_maxs[v] = note_to_midi(mx)
-        else:
-            piece_mins[v] = note_to_midi("A4")
-            piece_maxs[v] = note_to_midi("A5")
+# ===== FUNÇÕES DE GERAÇÃO DE NOTAS =====
 
-    voice_base_mins = {}
-    voice_base_maxs = {}
-    for v in voices:
-        mn, mx = group_ranges[v]
-        voice_base_mins[v] = note_to_midi(mn)
-        voice_base_maxs[v] = note_to_midi(mx)
-
-    # Inicializar dicionário de scores por voz
-    voice_scores_by_voice = {v: {} for v in voices}
-
-    # Faixas de transposição consideradas
-    T_values = list(range(-11, 12))
-
-    best_T = None
-    best_score = -float('inf')
-    best_offsets = {}
-
-    t_scores = {}
-    feasible_Ts = []
-    all_feasible = []
-
-    for T in T_values:
-        offsets = {}
-        total_score = 0.0
-        feasible_for_T = True
-
-        for v in voices:
-            if v in piece_ranges and piece_ranges[v] != ('', ''):
-                min_i = piece_mins[v]
-                max_i = piece_maxs[v]
-
-                min_v = voice_base_mins[v]
-                max_v = voice_base_maxs[v]
-
-                required_span = max_i - min_i
-                allowed_span = max_v - min_v
-
-                best_score_v = -float('inf')
-                best_O = None
-                best_L = best_H = None
-                best_d_min = best_d_max = None
-
-                for O in range(-4, 5):
-                    low = min_i + T + 12 * O
-                    high = max_i + T + 12 * O
-
-                    # Verificar encaixe na faixa da voz
-                    if low < min_v or high > max_v:
-                        continue
-
-                    d_min = low - min_v
-                    d_max = max_v - high
-
-                    m = (allowed_span - required_span) / 2.0
-
-                    score_v = 1.0 - (abs(d_min - m) + abs(d_max - m)) / (2*m) if m != 0 else 0#-math.inf
-
-                    if (score_v > best_score_v) or (
-                            abs(score_v - best_score_v) < 1e-12 and (best_O is None or abs(O) < abs(best_O))):
-                        best_score_v = score_v
-                        best_O = O
-                        best_L = low
-                        best_H = high
-                        best_d_min = d_min
-                        best_d_max = d_max
-
-                if best_O is None:
-                    feasible_for_T = False
-                    voice_scores_by_voice[v][T] = 0.0  # Transposição inviável para esta voz
-                    #break
-
-                offsets[v] = best_O
-                voice_scores_by_voice[v][T] = best_score_v  # Armazenar score por voz
-                total_score += best_score_v
-            else:
-                voice_scores_by_voice[v][T] = 0.0
-
-        if feasible_for_T:
-            t_scores[T] = total_score
-            feasible_Ts.append(T)
-
-            if best_T is None or total_score > best_score or (
-                    abs(total_score - best_score) < 1e-12 and abs(T) < abs(best_T)):
-                best_T = T
-                best_score = total_score
-                best_offsets = offsets
-
-        all_feasible.append((T, total_score, offsets))
-
-    debug_ranking_T = sorted(feasible_Ts, key=lambda t: (-t_scores.get(t, -float('inf')), abs(t)))
-
-    if best_T is None:
-        return {
-            "best_T": None,
-            "best_Os": {},
-            "best_key_root": original_root,
-            "best_key_mode": original_mode,
-            "voice_scores": voice_scores_by_voice,
-            "debug": debug_ranking_T
-        }
-
-    new_root, new_mode = transpose_key(original_root, original_mode, best_T)
-
-    return {
-        "best_T": best_T,
-        "best_Os": best_offsets,
-        "best_key_root": new_root,
-        "best_key_mode": new_mode,
-        "voice_scores": voice_scores_by_voice,
-        "debug": debug_ranking_T
-    }
-
-def analyze_ranges_with_penalty2(original_root: str,
-                                original_mode: str,
-                                piece_ranges: Dict[str, tuple],
-                                group_ranges: Optional[Dict[str, tuple]] = None) -> Dict[str, Any]:
+def generate_note_range(start_note,
+                        end_note):
     """
-    Análise com pontuação para encontrar o melhor T usando o esquema descrito.
-    Retorna um dict com:
-      - best_T
-      - best_Os (offsets por voz)
-      - best_key_root, best_key_mode
-      - debug (ranking de Ts para debug)
+    Gera lista de notas do piano no range especificado
+
+    Args:
+        start_note: Nota inicial (ex: 'C2')
+        end_note: Nota final (ex: 'C6')
+
+    Returns:
+        list: Lista de notas no formato string (ex: ['C2', 'C#2', 'D2', ...])
     """
-    voices = list({k: v for k, v in piece_ranges.items() if v != ('', '')}.keys()) if group_ranges is None else list(group_ranges.keys())
+    notes = []
 
-    if group_ranges is None:
-        group_ranges = VOICE_BASE_RANGES
+    # Encontra índices de início e fim
+    start_parts = parse_note(start_note)
+    end_parts = parse_note(end_note)
 
-    # Mapear ranges por voz, com fallback para valores padrão se ausentes
-    piece_mins = {}
-    piece_maxs = {}
-    for v in voices:
-        if v in piece_ranges:
-            mn, mx = piece_ranges[v]
-            piece_mins[v] = note_to_midi(mn)
-            piece_maxs[v] = note_to_midi(mx)
-        else:
-            piece_mins[v] = note_to_midi("A4")
-            piece_maxs[v] = note_to_midi("A5")
+    for octave in range(start_parts[1], end_parts[1] + 1):
+        for note_name in SEMITONE_TO_SHARP:
+            note = f"{note_name}{octave}"
 
-    voice_base_mins = {}
-    voice_base_maxs = {}
-    for v in voices:
-        mn, mx = group_ranges[v]
-        voice_base_mins[v] = note_to_midi(mn)
-        voice_base_maxs[v] = note_to_midi(mx)
+            # Verifica se está no range
+            if librosa.note_to_midi(note) >= librosa.note_to_midi(start_note) and \
+                    librosa.note_to_midi(note) <= librosa.note_to_midi(end_note):
+                notes.append(note)
 
-    # Faixas de transposição consideradas
-    T_values = list(range(-11, 12))
+    return notes
 
-    best_T = None
-    best_score = -float('inf')
-    best_offsets = {}
 
-    t_scores = {}
-    feasible_Ts = []
-    all_feasible = []
+# ===== FUNÇÕES DE ÁUDIO =====
 
-    for T in T_values:
-        offsets = {}
-        total_score = 0.0
-        feasible_for_T = True
-        for v in voices:
-            if v in piece_ranges and piece_ranges[v] != ('', ''):
-                min_i = piece_mins[v]
-                max_i = piece_maxs[v]
+def play_note(note,
+              duration=2.0):
+    """
+    Reproduz a nota por X segundos em uma thread separada
 
-                min_v = voice_base_mins[v]
-                max_v = voice_base_maxs[v]
+    Args:
+        note: String representando a nota
+        duration: Duração da nota em segundos (padrão: 2.0)
+    """
 
-                required_span = max_i - min_i
-                allowed_span = max_v - min_v
+    def play():
+        try:
+            if isinstance(note, float):
+                frequency = note
+                midi = librosa.hz_to_midi(note)
+            elif isinstance(note, int):
+                midi = note
+                frequency = librosa.midi_to_hz(midi)
+            elif isinstance(note, str):
+                midi = librosa.note_to_midi(note)
+                frequency = librosa.midi_to_hz(midi)
 
-                best_score_v = -float('inf')
-                best_O = None
-                best_L = best_H = None
-                best_d_min = best_d_max = None
+            # Parâmetros de áudio
+            sample_rate = 44100
+            t = np.linspace(0, duration, int(sample_rate * duration), False)
 
-                for O in range(-4, 5):
-                    low = min_i + T + 12 * O
-                    high = max_i + T + 12 * O
+            # Gera onda senoidal simples
+            wave = np.sin(2 * np.pi * frequency * t)
 
-                    # Verificar encaixe na faixa da voz
-                    if low < min_v or high > max_v:
-                        continue
+            # Aplica envelope ADSR simples para suavizar
+            attack = int(0.1 * sample_rate)
+            release = int(0.2 * sample_rate)
 
-                    d_min = low - min_v
-                    d_max = max_v - high
+            # Attack
+            wave[:attack] *= np.linspace(0, 1, attack)
+            # Release
+            wave[-release:] *= np.linspace(1, 0, release)
 
-                    m = (allowed_span - required_span) / 2.0
+            # Normaliza e converte para float32
+            wave = wave.astype(np.float32)
 
-                    if m > 0:
-                        score_v = 1.0 - (abs(d_min - m) + abs(d_max - m)) / (2.0 * m)
-                    else:
-                        score_v = 1.0 if (d_min == 0 and d_max == 0) else 0.0
+            # Reproduz o som
+            sd.play(wave, sample_rate)
+            sd.wait()
 
-                    if (score_v > best_score_v) or (abs(score_v - best_score_v) < 1e-12 and (best_O is None or abs(O) < abs(best_O))):
-                        best_score_v = score_v
-                        best_O = O
-                        best_L = low
-                        best_H = high
-                        best_d_min = d_min
-                        best_d_max = d_max
+        except Exception as e:
+            print(f"Erro ao reproduzir nota {note}: {e}")
 
-                if best_O is None:
-                    feasible_for_T = False
-                    break
-
-                offsets[v] = best_O
-                total_score += best_score_v
-
-        if feasible_for_T:
-            t_scores[T] = total_score
-            feasible_Ts.append(T)
-
-            if best_T is None or total_score > best_score or (abs(total_score - best_score) < 1e-12 and abs(T) < abs(best_T)):
-                best_T = T
-                best_score = total_score
-                best_offsets = offsets
-
-        all_feasible.append((T, total_score, offsets))
-
-    debug_ranking_T = sorted(feasible_Ts, key=lambda t: (-t_scores.get(t, -float('inf')), abs(t)))
-
-    if best_T is None:
-        return {
-            "best_T": None,
-            "best_Os": {},
-            "best_key_root": original_root,
-            "best_key_mode": original_mode,
-            "debug": debug_ranking_T
-        }
-
-    new_root, new_mode = transpose_key(original_root, original_mode, best_T)
-
-    return {
-        "best_T": best_T,
-        "best_Os": best_offsets,
-        "best_key_root": new_root,
-        "best_key_mode": new_mode,
-        "debug": debug_ranking_T
-    }
+    # Executa em thread separada para não bloquear a UI
+    thread = threading.Thread(target=play, daemon=True)
+    thread.start()

@@ -11,13 +11,13 @@ Responsabilidades:
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 import re
+import librosa
 from Constants import VOICES, VOICE_BASE_RANGES
-from GeneralFunctions import note_to_midi
 from KeyboardVisualizer import KeyboardVisualizer
 
 
 class CoristasUIManager:
-    def __init__(self, parent_frame, coristas_mgr, on_reload_callback=None):
+    def __init__(self, parent_frame, coristas_mgr, on_reload_callback=None, on_group_changed=None):
         """
         Args:
             parent_frame: Frame pai onde a UI será criada
@@ -27,6 +27,7 @@ class CoristasUIManager:
         self.parent_frame = parent_frame
         self.coristas_mgr = coristas_mgr
         self.on_reload_callback = on_reload_callback
+        self.on_group_changed = on_group_changed
 
         # Controle de ordenação
         self.sort_column = None
@@ -38,7 +39,8 @@ class CoristasUIManager:
         self.grupos_var = None
         self.grupo_nome_var = tk.StringVar()
 
-    def create_table(self, table_frame):
+    def create_table(self,
+                     table_frame):
         """
         Cria a TreeView de coristas.
 
@@ -53,6 +55,8 @@ class CoristasUIManager:
             show="headings"
         )
 
+        self._setup_voice_tags()
+
         for col in columns:
             self.tree_coristas.column(col, width=100, anchor="center")
             self.tree_coristas.heading(
@@ -66,7 +70,8 @@ class CoristasUIManager:
         self.tree_coristas.bind("<Double-1>", self._on_double_click)
         self.tree_coristas.bind("<Delete>", self._on_delete_key)
 
-    def create_group_selector(self, group_frame):
+    def create_group_selector(self,
+                              group_frame):
         """
         Cria o seletor de grupos.
 
@@ -98,31 +103,54 @@ class CoristasUIManager:
             command=self.add_group
         ).pack(pady=2)
 
-    def reload_table(self):
-        """Recarrega a visualização da tabela com os coristas atuais."""
+    def reload_table(self
+                     ):
         if self.tree_coristas is None:
             return
 
-        # Limpa tabela
         for item in self.tree_coristas.get_children():
             self.tree_coristas.delete(item)
 
-        # Preenche com coristas
+        if not self.coristas_mgr.coristas:
+            self.coristas_mgr.load_data()
+
         for corista_nome in self.coristas_mgr.coristas:
             corista = self.coristas_mgr.coristas[corista_nome]
             range_str = f"{corista['range_min']}  ⟷  {corista['range_max']}"
-            vozes_rec = ", ".join(corista.get('vozes_recomendadas', []))
-            vozes_pos = ", ".join(corista.get('vozes_possiveis', []))
+            vozes_rec = ", ".join(corista.get("vozes_recomendadas", []))
+            vozes_pos = ", ".join(corista.get("vozes_possiveis", []))
 
-            self.tree_coristas.insert("", "end", values=(
-                corista_nome,
-                range_str,
-                corista['voz_atribuida'],
-                vozes_rec,
-                vozes_pos
-            ))
+            voz = (corista.get("voz_atribuida") or "").strip()
+            tag = voz if voz in getattr(self, "_voice_colors", {}) else ""
 
-    def add_group(self):
+            self.tree_coristas.insert(
+                "", "end",
+                values=(corista_nome, range_str, voz, vozes_rec, vozes_pos),
+                tags=(tag,) if tag else ()
+            )
+
+    def _setup_voice_tags(self
+                          ):
+        # Masculinas: mais grave -> mais escuro
+        self._voice_colors = {
+            "Baixo": ("#0B3D91", "white"),
+            "Barítono": ("#2A6FBB", "white"),
+            "Tenor": ("#7AB8FF", "black"),
+
+            # Femininas: mais grave -> mais escuro
+            "Contralto": ("#8B1E5D", "white"),
+            "Mezzo-soprano": ("#C2185B", "white"),
+            "Soprano": ("#F48FB1", "black"),
+        }
+
+        # Opcional: caso vazio/desconhecido
+        self._default_row = ("", "")  # não muda
+
+        for voz, (bg, fg) in self._voice_colors.items():
+            self.tree_coristas.tag_configure(voz, background=bg, foreground=fg)
+
+    def add_group(self
+                  ):
         """Adiciona um novo grupo de coristas."""
         nome = simpledialog.askstring("Adicionar Grupo", "Nome do Novo Grupo:")
         if nome and nome.strip():
@@ -140,7 +168,8 @@ class CoristasUIManager:
             self.coristas_mgr.coristas.clear()
             self._on_group_selected()
 
-    def get_selected_corista(self):
+    def get_selected_corista(self
+                             ):
         """
         Retorna o nome do corista selecionado na TreeView.
 
@@ -155,7 +184,8 @@ class CoristasUIManager:
         vals = self.tree_coristas.item(item, "values")
         return vals[0] if vals else None
 
-    def remove_selected_corista(self):
+    def remove_selected_corista(self
+                                ):
         """
         Remove o corista selecionado.
 
@@ -176,7 +206,8 @@ class CoristasUIManager:
 
         return False, "Erro ao remover corista"
 
-    def edit_selected_corista(self, master):
+    def edit_selected_corista(self,
+                              master):
         """
         Abre janela de edição para o corista selecionado.
 
@@ -197,7 +228,8 @@ class CoristasUIManager:
         # Cria janela de edição
         self._create_edit_dialog(master, corista_nome, corista)
 
-    def _create_edit_dialog(self, master, corista_nome, corista):
+    def _create_edit_dialog(self,
+                            master, corista_nome, corista):
         """Cria a janela de diálogo para editar corista."""
         dialog = tk.Toplevel(master)
         dialog.title("Editar Voz do Corista")
@@ -274,9 +306,9 @@ class CoristasUIManager:
 
             # Validação
             try:
-                note_to_midi(range_min)
-                note_to_midi(range_max)
-                if note_to_midi(range_min) > note_to_midi(range_max):
+                #librosa.note_to_midi(range_min)
+                #librosa.note_to_midi(range_max)
+                if librosa.note_to_midi(range_min) > librosa.note_to_midi(range_max):
                     return False
             except:
                 return False
@@ -407,9 +439,9 @@ class CoristasUIManager:
 
             # Validar ranges
             try:
-                note_to_midi(novo_range_min)
-                note_to_midi(novo_range_max)
-                if note_to_midi(novo_range_min) > note_to_midi(novo_range_max):
+                librosa.note_to_midi(novo_range_min)
+                librosa.note_to_midi(novo_range_max)
+                if librosa.note_to_midi(novo_range_min) > librosa.note_to_midi(novo_range_max):
                     raise ValueError(f"Range inválido: {novo_range_min} > {novo_range_max}")
             except Exception as e:
                 messagebox.showerror("Erro", f"Erro ao validar range: {str(e)}")
@@ -466,7 +498,8 @@ class CoristasUIManager:
         ttk.Button(button_frame, text="Confirmar", command=confirm).pack(side="left", padx=10)
         ttk.Button(button_frame, text="Cancelar", command=dialog.destroy).pack(side="left", padx=10)
 
-    def _sort_column(self, col_name):
+    def _sort_column(self,
+                     col_name):
         """Ordena a TreeView pela coluna clicada."""
         if self.sort_column == col_name:
             self.sort_reverse = not self.sort_reverse
@@ -481,9 +514,21 @@ class CoristasUIManager:
 
         if col_name == "Range":
             if not self.sort_reverse:
-                items.sort(key=lambda x: self.coristas_mgr.note_to_number(x[1][1].split("⟷")[0].strip()))
+                items.sort(key=lambda x: librosa.note_to_midi(x[1][1].split("⟷")[0].strip()))
             else:
-                items.sort(key=lambda x: self.coristas_mgr.note_to_number(x[1][1].split("⟷")[1].strip()), reverse=True)
+                items.sort(key=lambda x: librosa.note_to_midi(x[1][1].split("⟷")[1].strip()), reverse=True)
+        elif col_name == "Voz Atribuída":
+            rank = {k: i for i, k in enumerate(VOICE_BASE_RANGES)}
+
+            def voice_rank(s: str) -> int:
+                # Se tiver "Baixo, Tenor" etc, pega a melhor (menor) posição
+                parts = [p.strip() for p in (s or "").split(",") if p.strip()]
+                return min((rank.get(p, 10 ** 9) for p in parts), default=10 ** 9)
+
+            items.sort(
+                key=lambda it: voice_rank(it[1][2]),
+                reverse=self.sort_reverse
+            )
         else:
             col_index = {
                 "Nome": 0,
@@ -495,15 +540,13 @@ class CoristasUIManager:
             index = col_index.get(col_name, 0)
             items.sort(key=lambda x: x[1][index], reverse=self.sort_reverse)
 
-        for item in self.tree_coristas.get_children():
-            self.tree_coristas.delete(item)
-
-        for item, values in items:
-            self.tree_coristas.insert("", "end", values=values)
+        for i, (item, values) in enumerate(items):
+            self.tree_coristas.move(item, "", i)
 
         self._update_sort_indicator(col_name)
 
-    def _update_sort_indicator(self, col_name):
+    def _update_sort_indicator(self,
+                               col_name):
         """Atualiza o texto do cabeçalho com indicador de direção."""
         columns = ("Nome", "Range", "Voz Atribuída", "Voz(es) Recomendada(s)", "Voz(es) Possível(is)")
 
@@ -520,7 +563,8 @@ class CoristasUIManager:
 
             self.tree_coristas.heading(col, text=texto)
 
-    def _on_group_selected(self, event=None):
+    def _on_group_selected(self,
+                           event=None):
         """Callback quando grupo é selecionado."""
         grupo = self.grupo_combo.get()
         self.grupo_nome_var.set(grupo)
@@ -534,7 +578,11 @@ class CoristasUIManager:
         if self.on_reload_callback:
             self.on_reload_callback()
 
-    def _on_double_click(self, event):
+        if self.on_group_changed:
+            self.on_group_changed(grupo)
+
+    def _on_double_click(self,
+                         event):
         """Callback para duplo clique na TreeView."""
         item_id = self.tree_coristas.focus()
         if not item_id:
@@ -543,12 +591,14 @@ class CoristasUIManager:
         self.tree_coristas.selection_set(item_id)
         self.edit_selected_corista(self.parent_frame.master)
 
-    def _on_delete_key(self, event):
+    def _on_delete_key(self,
+                       event):
         """Callback para tecla Delete."""
         if self.tree_coristas.selection():
             self.remove_selected_corista()
         return "break"
 
-    def get_current_group(self):
+    def get_current_group(self
+                          ):
         """Retorna o nome do grupo atual."""
         return self.grupo_nome_var.get()

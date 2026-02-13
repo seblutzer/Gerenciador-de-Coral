@@ -1,32 +1,6 @@
 {
   "grupos": {
     "Grupo Vocal": {
-      "Eduardo Lutzer": {
-        "range_min": "F2",
-        "range_max": "A4",
-        "voz_calculada": "Tenor",
-        "voz_atribuida": "Tenor",
-        "vozes_recomendadas": [
-          "Tenor",
-          "Barítono"
-        ],
-        "vozes_possiveis": [
-          "Baixo",
-          "Contralto"
-        ]
-      },
-      "João Pedro": {
-        "range_min": "C2",
-        "range_max": "C4",
-        "voz_calculada": "Baixo",
-        "voz_atribuida": "Barítono",
-        "vozes_recomendadas": [
-          "Baixo"
-        ],
-        "vozes_possiveis": [
-          "Barítono"
-        ]
-      },
       "Douglas Madoks": {
         "range_min": "G2",
         "range_max": "F#4",
@@ -76,18 +50,6 @@
           "Mezzo-soprano",
           "Tenor",
           "Contralto"
-        ]
-      },
-      "Samuel Dorta": {
-        "range_min": "D2",
-        "range_max": "C4",
-        "voz_calculada": "Baixo",
-        "voz_atribuida": "Barítono",
-        "vozes_recomendadas": [
-          "Baixo"
-        ],
-        "vozes_possiveis": [
-          "Barítono"
         ]
       },
       "Willian Modro": {
@@ -142,22 +104,9 @@
           "Soprano"
         ]
       },
-      "Tester": {
-        "range_min": "G2",
-        "range_max": "F#4",
-        "voz_calculada": "Barítono",
-        "voz_atribuida": "Barítono",
-        "vozes_recomendadas": [
-          "Barítono"
-        ],
-        "vozes_possiveis": [
-          "Baixo",
-          "Tenor"
-        ]
-      },
-      "Noraml": {
+      "Eduardo Lutzer": {
         "range_min": "F2",
-        "range_max": "G4",
+        "range_max": "A4",
         "voz_calculada": "Tenor",
         "voz_atribuida": "Tenor",
         "vozes_recomendadas": [
@@ -165,7 +114,43 @@
           "Barítono"
         ],
         "vozes_possiveis": [
+          "Baixo",
+          "Contralto"
+        ]
+      },
+      "Mãe da Luíza": {
+        "range_min": "B3",
+        "range_max": "G5",
+        "voz_calculada": "Mezzo-soprano",
+        "voz_atribuida": "Mezzo-soprano",
+        "vozes_recomendadas": [],
+        "vozes_possiveis": [
+          "Mezzo-soprano",
+          "Soprano"
+        ]
+      },
+      "João Pedro": {
+        "range_min": "C2",
+        "range_max": "C4",
+        "voz_calculada": "Baixo",
+        "voz_atribuida": "Barítono",
+        "vozes_recomendadas": [
           "Baixo"
+        ],
+        "vozes_possiveis": [
+          "Barítono"
+        ]
+      },
+      "Samuel Dorta": {
+        "range_min": "D2",
+        "range_max": "C4",
+        "voz_calculada": "Baixo",
+        "voz_atribuida": "Barítono",
+        "vozes_recomendadas": [
+          "Baixo"
+        ],
+        "vozes_possiveis": [
+          "Barítono"
         ]
       }
     },
@@ -223,15 +208,15 @@
         }
       },
       "solistas": {
-        "Eduardo Lutzer": [
-          "A4",
-          "A5"
-        ],
         "Douglas Madoks": [
           "A4",
           "A5"
         ],
         "Dalva Lutzer": [
+          "A4",
+          "A5"
+        ],
+        "Eduardo Lutzer": [
           "A4",
           "A5"
         ]
@@ -240,13 +225,11 @@
         "Tenor": [
           "Eduardo Lutzer",
           "Douglas Madoks",
-          "Willian Modro",
-          "Noraml"
+          "Willian Modro"
         ],
         "Barítono": [
           "João Pedro",
-          "Samuel Dorta",
-          "Tester"
+          "Samuel Dorta"
         ],
         "Contralto": [
           "Manu Laurindo",
@@ -359,8 +342,8 @@
       },
       "solistas": {
         "Dalva Lutzer": [
-          "g#3",
-          "b4"
+          "G#3",
+          "B4"
         ]
       },
       "voices": {
@@ -412,8 +395,7 @@
       "voices": {
         "Tenor": [
           "Eduardo Lutzer",
-          "Douglas Madoks",
-          "Noraml"
+          "Douglas Madoks"
         ],
         "Baixo": [
           "João Pedro",
@@ -429,9 +411,6 @@
           "Kátia Vanessa",
           "Paloma",
           "Dalva Lutzer"
-        ],
-        "Barítono": [
-          "Tester"
         ]
       },
       "timestamp": "2026-02-10 05:35:35"

@@ -7,17 +7,14 @@ Responsabilidades:
 - Validar e processar dados de música
 """
 
-from tkinter import messagebox
-from Constants import VOICES
-
-
 class MusicDataManager:
     def __init__(self, coristas_mgr):
         self.coristas_mgr = coristas_mgr
         self.music_library = {}
         self.music_names = []
 
-    def save_music_ranges(self, music_name, ranges, solistas, vozes_por_corista, root, mode):
+    def save_music_ranges(self,
+                          music_name, ranges, solistas, vozes_por_corista, root, mode):
         """
         Salva os ranges de uma música no JSON.
 
@@ -57,7 +54,8 @@ class MusicDataManager:
 
         return sucesso, mensagem
 
-    def load_music_library(self, grupo=None):
+    def load_music_library(self,
+                           grupo=None):
         """
         Carrega a biblioteca de músicas do JSON.
 
@@ -89,7 +87,8 @@ class MusicDataManager:
 
         return self.music_names, groups
 
-    def get_music_data(self, music_name):
+    def get_music_data(self,
+                       music_name):
         """
         Retorna os dados de uma música específica.
 
@@ -101,7 +100,8 @@ class MusicDataManager:
         """
         return self.music_library.get(music_name)
 
-    def normalize_solistas_data(self, solistas_raw):
+    def normalize_solistas_data(self,
+                                solistas_raw):
         """
         Normaliza dados de solistas de diferentes formatos.
 
@@ -132,22 +132,8 @@ class MusicDataManager:
 
         return {}
 
-    def validate_music_name(self, name):
-        """
-        Valida o nome de uma música.
-
-        Args:
-            name: Nome a validar
-
-        Returns:
-            (válido: bool, mensagem: str)
-        """
-        if not name or name.strip() == "" or name == "Untitled":
-            return False, "Nome da música é obrigatório"
-
-        return True, ""
-
-    def check_music_exists(self, music_name):
+    def check_music_exists(self,
+                           music_name):
         """
         Verifica se uma música já existe na biblioteca.
 

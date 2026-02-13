@@ -2,9 +2,9 @@ import json
 import os
 import re
 import time
+import librosa
 from tkinter import messagebox
 from Constants import DATA_FILE, VOICES, VOICE_BASE_RANGES, SEMITONE_TO_SHARP
-from GeneralFunctions import note_to_midi, midi_to_note
 
 
 # ===== GERENCIAMENTO DE CORISTAS E DADOS =====
@@ -14,12 +14,14 @@ class CoristasManager:
         self.grupo = grupo          # Nome do grupo atual
         self.coristas = {}          # Dict de coristas do grupo atual
 
-    def set_group(self, grupo):
+    def set_group(self,
+            grupo):
         """Atualiza o grupo atual e recarrega os coristas desse grupo."""
         self.grupo = grupo
         self.load_data()
 
-    def load_data(self):
+    def load_data(self
+                  ):
         #data, lista_grupos = self.read_data('grupos', both=True, group_list=True)
         with open(self.data_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -31,12 +33,7 @@ class CoristasManager:
         self.coristas = data['grupos'][self.grupo]
 
     def save_music_ranges_to_json(self,
-                                  music_name: str,
-                                  ranges: dict,
-                                  solistas: dict,
-                                  vozes_por_corista: dict,
-                                  root: str,
-                                  mode: str) -> bool:
+                                  music_name: str, ranges: dict, solistas: dict, vozes_por_corista: dict, root: str, mode: str) -> bool:
         """
         Salva ou atualiza uma música no arquivo de dados.
         Realiza UMA ÚNICA LEITURA E ESCRITA do arquivo.
@@ -109,7 +106,8 @@ class CoristasManager:
         except Exception as e:
             return False, f"Erro ao salvar faixa: {str(e)}"
 
-    def check_music_exists(self, music_name: str) -> bool:
+    def check_music_exists(self,
+                           music_name: str) -> bool:
         """Verifica se uma música já existe no arquivo"""
         try:
             if os.path.exists(self.data_file):
@@ -120,8 +118,8 @@ class CoristasManager:
             pass
         return False
 
-
-    def save_corista(self, corista_nome=None, replace=None):
+    def save_corista(self,
+                     corista_nome=None, replace=None):
         """Salva dados no arquivo JSON sob o grupo atual: grupos -> nome_grupo -> coristas"""
         if not self.grupo:
             print("Grupo não definido para salvar coristas.")
@@ -181,7 +179,8 @@ class CoristasManager:
             print(f"Erro ao salvar dados: {e}")
             return False
 
-    def _note_to_sharp(self, note: str) -> str:
+    def _note_to_sharp(self,
+                       note: str) -> str:
         if len(note) < 3:
             return note
         letter = note[0]
@@ -201,34 +200,8 @@ class CoristasManager:
 
         return f"{name}{out_oct}"
 
-    def note_to_number(self, nota):
-        """Converte nota musical (ex: 'C4', 'B#2') para número comparável"""
-        nota = nota.strip()
-
-        # Mapa de notas
-        notas_map = {
-            'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11
-        }
-
-        # Extrai a nota base e oitava
-        nota_base = nota[0]
-
-        # Verifica acidentes
-        valor = notas_map.get(nota_base, 0)
-
-        if '#' in nota:
-            valor += 1
-        elif 'b' in nota:
-            valor -= 1
-
-        # Extrai a oitava
-        oitava_str = ''.join(c for c in nota if c.isdigit() or c == '-')
-        oitava = int(oitava_str) if oitava_str else 0
-
-        # Retorna um número único: oitava * 12 + nota
-        return oitava * 12 + valor
-
-    def adicionar_grupo(self, nome):
+    def adicionar_grupo(self,
+                        nome):
         with open(DATA_FILE, 'r+', encoding='utf-8') as f:
             data = json.load(f)
             data['grupos'][nome] = {}
@@ -237,7 +210,8 @@ class CoristasManager:
             json.dump(data, f, ensure_ascii=False, indent=2)
             f.truncate()
 
-    def read_data(self, extract=None, all_in=False, both=False, group_list=False):
+    def read_data(self,
+                  extract=None, all_in=False, both=False, group_list=False):
         if not os.path.exists(self.data_file):
             return {} if not extract else {f'{extract}_não_encontrado': True}
 
@@ -266,7 +240,8 @@ class CoristasManager:
             print(f"Erro ao ler dados: {e}")
             return {} if not extract else {}
 
-    def add_corista(self, nome, range_min, range_max):
+    def add_corista(self,
+                    nome, range_min, range_max):
         """Adiciona um corista com vozes compatíveis"""
         try:
             # Validação: cada valor deve ser do formato A-G seguido de 2-7
@@ -290,9 +265,9 @@ class CoristasManager:
             range_max = self._note_to_sharp(range_max)
 
             # Valida ranges
-            note_to_midi(range_min)
-            note_to_midi(range_max)
-            if note_to_midi(range_min) > note_to_midi(range_max):
+            #librosa.note_to_midi(range_min)
+            #librosa.note_to_midi(range_max)
+            if  librosa.note_to_midi(range_min) >  librosa.note_to_midi(range_max):
                 raise ValueError(f"Range inválido: {range_min} > {range_max}")
 
             # Calcula vozes compatíveis
@@ -316,7 +291,8 @@ class CoristasManager:
         except Exception as e:
             return False, str(e)
 
-    def remove_corista(self, corista_nome):
+    def remove_corista(self,
+                       corista_nome):
         # Verifica se o corista existe no grupo atual
         if corista_nome not in self.coristas:
             return False
@@ -409,14 +385,8 @@ class CoristasManager:
             print(f"Erro ao atualizar dados: {e}")
             return False
 
-    def update_corista_voz(self, nome, voz_atribuida):
-        """Atualiza a voz atribuída de um corista"""
-        if nome in self.coristas.keys():
-            self.coristas[nome]['voz_atribuida'] = voz_atribuida
-            return True
-        return False
-
-    def calculate_compatible_voices(self, range_min: str, range_max: str, observations=False) -> tuple:
+    def calculate_compatible_voices(self,
+                                    range_min: str, range_max: str, observations=False) -> tuple:
         """
         Calcula todas as vozes compatíveis com o range fornecido.
 
@@ -425,16 +395,16 @@ class CoristasManager:
         - vozes_possiveis: lista de tuples (voz, max_diff, obs) com até 3 semitons de diferença
         """
         try:
-            min_midi = note_to_midi(range_min)
-            max_midi = note_to_midi(range_max)
+            min_midi =  librosa.note_to_midi(range_min)
+            max_midi =  librosa.note_to_midi(range_max)
 
             vozes_recomendadas = []
             vozes_possiveis = []
 
             for voice in VOICES:
                 voice_min_str, voice_max_str = VOICE_BASE_RANGES[voice]
-                voice_min = note_to_midi(voice_min_str)
-                voice_max = note_to_midi(voice_max_str)
+                voice_min =  librosa.note_to_midi(voice_min_str)
+                voice_max =  librosa.note_to_midi(voice_max_str)
 
                 # Encaixe perfeito: o range do corista CABE dentro da faixa da voz
                 if min_midi <= voice_min and max_midi >= voice_max:
@@ -466,20 +436,8 @@ class CoristasManager:
             print(f"Erro ao calcular vozes compatíveis: {e}")
             return [], []
 
-    def calculate_voice(self, range_min, range_max) -> str:
-        """
-        Retorna a voz primária (a melhor entre as compatíveis).
-        """
-        vozes_recomendadas, vozes_possiveis = self.calculate_compatible_voices(range_min, range_max)
-
-        if vozes_recomendadas:
-            return vozes_recomendadas[0]
-        elif vozes_possiveis:
-            return vozes_possiveis[0][0]
-        else:
-            return VOICES[0]
-
-    def get_voice_group_ranges(self, solistas=None) -> dict:
+    def get_voice_group_ranges(self,
+                               solistas=None) -> dict:
         """
         Calcula os ranges do grupo por voz.
         """
@@ -488,8 +446,8 @@ class CoristasManager:
         # Agrupa coristas por voz atribuída
         for corista in self.coristas:
             voz = self.coristas[corista]['voz_atribuida']
-            min_midi = note_to_midi(self.coristas[corista]['range_min'])
-            max_midi = note_to_midi(self.coristas[corista]['range_max'])
+            min_midi =  librosa.note_to_midi(self.coristas[corista]['range_min'])
+            max_midi =  librosa.note_to_midi(self.coristas[corista]['range_max'])
             voice_groups[voz].append((min_midi, max_midi))
 
         # Calcula range do grupo: maior mínimo e menor máximo
@@ -504,8 +462,8 @@ class CoristasManager:
                 group_max = min(maxs)  # menor máximo
 
                 if group_min <= group_max:
-                    group_ranges[voz] = (midi_to_note(int(group_min)), midi_to_note(int(group_max)))
-                    group_extension[voz] = (midi_to_note(int(min(mins))), midi_to_note(int(max(maxs))))
+                    group_ranges[voz] = ( librosa.midi_to_note(int(group_min)),  librosa.midi_to_note(int(group_max)))
+                    group_extension[voz] = ( librosa.midi_to_note(int(min(mins))),  librosa.midi_to_note(int(max(maxs))))
 
         if solistas:
             # Atualiza os valores de solistas com os ranges de coristas quando disponíveis
@@ -519,5 +477,3 @@ class CoristasManager:
             group_ranges = solistas_updated | group_ranges
 
         return group_ranges, group_extension
-
-#print(CoristasManager, CoristasManager.extract_group_list)

@@ -4,16 +4,18 @@ Responsabilidade única: Orquestração e inicialização da aplicação
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog
+import webbrowser
+from pathlib import Path
 
 # Managers
 from CoristasManager import CoristasManager
 from MusicDataManager import MusicDataManager
-from VocalTester import VocalTestManager
+from VocalTestManager import VocalTestManager
 from AnalysisManager import AnalysisManager
 from CoristasUIManager import CoristasUIManager
 from MusicLibraryUIManager import MusicLibraryUIManager
-from VocalTester import VocalTestUIBuilder
+from VocalTestUIBuilder import VocalTestUIBuilder
 
 # Outros componentes
 from Constants import VOICES, VOICE_BASE_RANGES
@@ -60,42 +62,8 @@ class VoiceRangeApp:
     # ABA 1: GERENCIAR CORISTAS
     # ============================================================
 
-    def toggle_pitch_recording(self):
-        """Toggle entre iniciar e parar gravação de pitch."""
-        # Verifica se está gravando
-        if self.vocal_test_mgr.vocal_tester and hasattr(self.vocal_test_mgr.vocal_tester, '_record_pitch') and self.vocal_test_mgr.vocal_tester._record_pitch:
-            # Está gravando - para
-            success = self.vocal_test_mgr.stop_pitch_recording()
-            if success:
-                # Restaura botões
-                self.vocal_widgets['btn_rec'].config(text="🔴REC Pitch")
-                self.vocal_widgets['btn_start_test'].config(state='normal')
-                self.vocal_widgets['btn_quick_test'].config(state='normal')
-                self.vocal_widgets['btn_stop_test'].config(state='disabled')
-                self.vocal_widgets['testing_time_cb'].config(state='normal')
-                self.vocal_widgets['status_label'].config(
-                    text=f"✓ Gravação salva",
-                    foreground='#27AE60'
-                )
-                messagebox.showinfo("Sucesso", f"Gravação de pitch salva com Sucesso!")
-        else:
-            # Não está gravando - inicia
-            success, msg = self.vocal_test_mgr.start_pitch_recording()
-            if success:
-                # Desabilita outros botões e muda texto
-                self.vocal_widgets['btn_rec'].config(text="⬛ Stop REC")
-                self.vocal_widgets['btn_start_test'].config(state='disabled')
-                self.vocal_widgets['btn_quick_test'].config(state='disabled')
-                self.vocal_widgets['btn_stop_test'].config(state='normal')
-                self.vocal_widgets['testing_time_cb'].config(state='disabled')
-                self.vocal_widgets['status_label'].config(
-                    text="Gravando pitch...",
-                    foreground='#E74C3C'
-                )
-            else:
-                messagebox.showwarning("Aviso", msg)
-
-    def setup_coristas_tab(self):
+    def setup_coristas_tab(self
+                           ):
         """Configura a aba de gerenciamento de coristas."""
         main_frame = ttk.Frame(self.frame_coristas)
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
@@ -159,6 +127,7 @@ class VoiceRangeApp:
         self.vocal_widgets['btn_repeat_tone'].config(command=self.repeat_tone_vocal)
         self.vocal_widgets['testing_time_cb'].bind("<<ComboboxSelected>>", self._on_testing_time_changed)
         self.vocal_widgets['noise_gate_slider'].config(command=self._on_noise_gate_changed)
+        self.vocal_widgets['piano_game_check'].config(command=self._on_piano_game_toggled)
 
         # ===== TABELA DE CORISTAS =====
         table_frame = ttk.LabelFrame(self.frame_coristas, text="Coristas Cadastrados", padding=10)
@@ -171,7 +140,8 @@ class VoiceRangeApp:
         self.coristas_ui_mgr = CoristasUIManager(
             table_frame,
             self.coristas_mgr,
-            on_reload_callback=self.on_coristas_data_changed
+            on_reload_callback=self.on_coristas_data_changed,
+            on_group_changed=self.on_group_changed
         )
         self.coristas_ui_mgr.create_group_selector(group_frame)
         self.coristas_ui_mgr.create_table(table_frame)
@@ -187,7 +157,8 @@ class VoiceRangeApp:
     # ABA 2: BIBLIOTECA MUSICAL
     # ============================================================
 
-    def setup_analise_tab(self):
+    def setup_analise_tab(self
+                          ):
         """Configura a aba de análise de transposição."""
         # Slider de transposição
         self.t_slider = tk.Scale(
@@ -289,7 +260,8 @@ class VoiceRangeApp:
     # CALLBACKS - CORISTAS
     # ============================================================
 
-    def add_corista(self):
+    def add_corista(self
+                    ):
         """Adiciona um corista."""
         nome = self.entrada_nome.get().strip()
         range_min = self.entrada_min.get().strip().upper()
@@ -316,7 +288,8 @@ class VoiceRangeApp:
             self.entrada_max.delete(0, "end")
             self.coristas_ui_mgr.reload_table()
 
-    def remove_corista(self):
+    def remove_corista(self
+                       ):
         """Remove o corista selecionado."""
         success, msg = self.coristas_ui_mgr.remove_selected_corista()
         if success:
@@ -324,11 +297,13 @@ class VoiceRangeApp:
         else:
             messagebox.showwarning("Aviso", msg)
 
-    def edit_corista_voz(self):
+    def edit_corista_voz(self
+                         ):
         """Abre janela de edição do corista selecionado."""
         self.coristas_ui_mgr.edit_selected_corista(self.master)
 
-    def on_coristas_data_changed(self):
+    def on_coristas_data_changed(self
+                                 ):
         """Callback quando dados de coristas mudam."""
         # Recarrega lista de música
         self.music_ui_mgr.update_music_library(self.coristas_ui_mgr.get_current_group())
@@ -336,11 +311,24 @@ class VoiceRangeApp:
         if hasattr(self, 'analysis_mgr') and self.analysis_mgr.current_piece_ranges:
             self.run_analysis()
 
+    def on_group_changed(self,
+                         grupo):
+        # limpa campos da aba de música
+        self.music_ui_mgr.clear_all_fields()
+        # limpa os resultados:
+        self.results_text.delete(1.0, 'end')
+        self.results_text.insert("end", "Resultados: Informe os ranges vocais e a faixa da música por voz.")
+
+        # limpa a vizualização dos ranges
+        self.visualizer.canvas.delete("all")
+        self.visualizer.draw_grid()
+
     # ============================================================
     # CALLBACKS - TESTE VOCAL
     # ============================================================
 
-    def start_vocal_test(self):
+    def start_vocal_test(self
+                         ):
         """Inicia teste vocal normal."""
         success, msg = self.vocal_test_mgr.start_test('normal')
         if not success:
@@ -355,7 +343,8 @@ class VoiceRangeApp:
         self.vocal_widgets['btn_stop_test'].config(state='normal')
         self.vocal_widgets['status_label'].config(text="Iniciando teste normal...", foreground='#F39C12')
 
-    def start_quick_vocal_test(self):
+    def start_quick_vocal_test(self
+                               ):
         """Inicia teste vocal rápido."""
         success, msg = self.vocal_test_mgr.start_test('quick')
         if not success:
@@ -370,7 +359,8 @@ class VoiceRangeApp:
         self.vocal_widgets['btn_repeat_tone'].config(state='disabled')
         self.vocal_widgets['status_label'].config(text="Iniciando teste rápido...", foreground='#F39C12')
 
-    def stop_vocal_test(self):
+    def stop_vocal_test(self
+                        ):
         """Para o teste vocal ou gravação."""
         # Verifica se é gravação de pitch
         if self.vocal_test_mgr.vocal_tester and hasattr(self.vocal_test_mgr.vocal_tester, '_record_pitch') and self.vocal_test_mgr.vocal_tester._record_pitch:
@@ -391,15 +381,18 @@ class VoiceRangeApp:
         self.vocal_widgets['btn_repeat_tone'].config(state='disabled')
         self.vocal_widgets['status_label'].config(text="Teste cancelado", foreground='#E74C3C')
 
-    def mark_too_low_vocal(self):
+    def mark_too_low_vocal(self
+                           ):
         """Marca como grave demais."""
         self.vocal_test_mgr.mark_too_low()
 
-    def mark_too_high_vocal(self):
+    def mark_too_high_vocal(self
+                            ):
         """Marca como agudo demais."""
         self.vocal_test_mgr.mark_too_high()
 
-    def repeat_tone_vocal(self):
+    def repeat_tone_vocal(self
+                          ):
         """Repete o tom atual."""
         success, msg = self.vocal_test_mgr.repeat_current_tone()
         if success:
@@ -407,7 +400,8 @@ class VoiceRangeApp:
         else:
             messagebox.showinfo("Aviso", msg)
 
-    def _on_testing_time_changed(self, event):
+    def _on_testing_time_changed(self,
+                                 event):
         """Callback quando tempo de teste muda."""
         try:
             new_time = int(self.vocal_widgets['testing_time_cb'].get())
@@ -416,7 +410,8 @@ class VoiceRangeApp:
         except:
             pass
 
-    def _on_noise_gate_changed(self, value):
+    def _on_noise_gate_changed(self,
+                               value):
         """Callback quando noise gate muda."""
         try:
             new_threshold = float(value)
@@ -425,7 +420,14 @@ class VoiceRangeApp:
         except:
             pass
 
-    def update_vocal_test_ui(self, **kwargs):
+    def _on_piano_game_toggled(self
+                               ):
+        """Callback quando checkbox do piano gamificado é alterado."""
+        enabled = self.vocal_widgets['piano_game_var'].get()
+        self.vocal_test_mgr.enable_piano_game(enabled)
+
+    def update_vocal_test_ui(self,
+                             **kwargs):
         """Atualiza elementos visuais do teste vocal."""
         if 'expected_note' in kwargs:
             self.vocal_widgets['expected_note_label'].config(text=kwargs['expected_note'])
@@ -469,7 +471,8 @@ class VoiceRangeApp:
             if key in kwargs and widget_key in self.vocal_widgets:
                 self.vocal_widgets[widget_key].config(state=kwargs[key])
 
-    def update_button_states(self, **kwargs):
+    def update_button_states(self,
+                             **kwargs):
         """Atualiza estado dos botões."""
         button_states = kwargs.get('button_states', {})
         if 'too_low' in button_states:
@@ -477,7 +480,8 @@ class VoiceRangeApp:
         if 'too_high' in button_states:
             self.vocal_widgets['btn_too_high'].config(state=button_states['too_high'])
 
-    def on_vocal_test_complete(self, range_min, range_max):
+    def on_vocal_test_complete(self,
+                               range_min, range_max):
         """Callback quando teste vocal completa."""
         if range_min and range_max:
             self.entrada_min.delete(0, "end")
@@ -502,11 +506,73 @@ class VoiceRangeApp:
         self.vocal_widgets['btn_too_low'].config(state='disabled')
         self.vocal_widgets['btn_too_high'].config(state='disabled')
 
+    def toggle_pitch_recording(self
+                               ):
+        """Toggle entre iniciar e parar gravação de pitch."""
+        # Verifica se está gravando
+        if self.vocal_test_mgr.vocal_tester and hasattr(self.vocal_test_mgr.vocal_tester, '_record_pitch') and self.vocal_test_mgr.vocal_tester._record_pitch:
+            # Está gravando - para
+            success, html = self.vocal_test_mgr.stop_pitch_recording()
+            if success:
+                # Restaura botões
+                self.vocal_widgets['btn_rec'].config(text="🔴REC Pitch")
+                self.vocal_widgets['btn_start_test'].config(state='normal')
+                self.vocal_widgets['btn_quick_test'].config(state='normal')
+                self.vocal_widgets['btn_stop_test'].config(state='disabled')
+                self.vocal_widgets['testing_time_cb'].config(state='normal')
+
+                file_name = simpledialog.askstring("Nomear Arquivo", "Nome do Arquivo:")
+                file_dir = "./Musicas/REC"
+
+                if file_name and file_name.strip():
+                    # Criar diretório se não existir
+                    Path(file_dir).mkdir(parents=True, exist_ok=True)
+
+                    file_path = Path(f"{file_dir}/{file_name}.html").resolve()
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write(html)
+                    messagebox.showinfo("Sucesso", f"Gravação de pitch salva em {file_dir}/{file_name}.html!")
+                    webbrowser.open(f"file:///{file_path}")
+
+                    # Salvar MIDI
+                    pm = self.analyzer.notes_to_midi(success)
+                    midi_path = Path(file_dir) / f"{file_name}.mid"
+                    self.analyzer.save_midi(pm, midi_path)
+                else:
+                    messagebox.showinfo("Ação cancelada", f"Gravação cancelada!")
+            else:
+                messagebox.showinfo("Audio em branco", f"Nenhuma nota detectada!")
+                self.vocal_widgets['btn_rec'].config(text="🔴REC Pitch")
+                self.vocal_widgets['btn_start_test'].config(state='normal')
+                self.vocal_widgets['btn_quick_test'].config(state='normal')
+                self.vocal_widgets['btn_stop_test'].config(state='disabled')
+                self.vocal_widgets['testing_time_cb'].config(state='normal')
+
+        else:
+            # Não está gravando - inicia
+            success, msg = self.vocal_test_mgr.start_pitch_recording()
+            self.music_ui_mgr.music_dir = None
+            self.music_ui_mgr.music_name = None
+            if success:
+                # Desabilita outros botões e muda texto
+                self.vocal_widgets['btn_rec'].config(text="⬛ Stop REC")
+                self.vocal_widgets['btn_start_test'].config(state='disabled')
+                self.vocal_widgets['btn_quick_test'].config(state='disabled')
+                self.vocal_widgets['btn_stop_test'].config(state='normal')
+                self.vocal_widgets['testing_time_cb'].config(state='disabled')
+                self.vocal_widgets['status_label'].config(
+                    text="Gravando pitch...",
+                    foreground='#E74C3C'
+                )
+            else:
+                messagebox.showwarning("Aviso", msg)
+
     # ============================================================
     # CALLBACKS - MÚSICA
     # ============================================================
 
-    def save_music_ranges(self):
+    def save_music_ranges(self
+                          ):
         """Salva ranges de música."""
         # Coleta dados
         name = self.music_ui_mgr.music_name_var.get()
@@ -557,9 +623,10 @@ class VoiceRangeApp:
         else:
             messagebox.showerror("Erro", mensagem)
 
-    def load_music_ranges_for_selection(self, name):
+    def load_music_ranges_for_selection(self,
+                                        name):
         """Carrega ranges de uma música selecionada."""
-        if not name or name.startswith("--"):
+        if not name or name.startswith("--") or name == 'Nome da Música':
             messagebox.showwarning("Aviso", "Nenhuma música válida selecionada.")
             self.music_ui_mgr.clear_all_fields()
             return
@@ -604,19 +671,64 @@ class VoiceRangeApp:
         else:
             self.run_analysis()
 
-    def load_voice_audio_files(self):
+    def load_voice_audio_files(self
+                               ):
         """Carrega e processa arquivos de áudio."""
-        success, msg = self.music_ui_mgr.load_voice_audio_files()
+        success, msg, voice = self.music_ui_mgr.load_voice_audio_files()
         if success:
-            messagebox.showinfo("Sucesso", msg)
+            filtered_log, html = VocalTestCore.export_pitch_log_to_html(VocalTestCore(), external=success['notes'])
+            success['notes'] = filtered_log
+
+            # Salvar Gráfico:
+            file_name = getattr(self.music_ui_mgr, 'music_name', None)
+            file_dir = getattr(self.music_ui_mgr, 'music_dir', None)
+
+            if file_name:
+                if file_dir:
+                    file_path = Path(f"{file_dir}/{file_name} - {voice}.html").resolve()
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write(html)
+                    messagebox.showinfo("Sucesso", f"Gravação de pitch salva em {file_name} - {voice}.html!")
+                    webbrowser.open(f"file:///{file_path}")
+                else:
+                    file_path = Path(f"./Musicas/{file_name} - {voice}.html").resolve()
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write(html)
+                    messagebox.showinfo("Sucesso", f"Gravação de pitch salva em {file_name} - {voice}.html!")
+                    webbrowser.open(f"file:///{file_path}")
+            else:
+                file_name = simpledialog.askstring("Nomear Arquivo", "Nome do Arquivo:")
+                if file_name and file_name.strip():
+                    if voice.lower() in file_name.lower():
+                        file_path = Path(f"./Musicas/{file_name}.html").resolve()
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            f.write(html)
+                        messagebox.showinfo("Sucesso", f"Gravação de pitch salva em {file_name}.html!")
+                        webbrowser.open(f"file:///{file_path}")
+                    else:
+                        file_path = Path(f"./Musicas/{file_name} - {voice}.html").resolve()
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            f.write(html)
+                        messagebox.showinfo("Sucesso", f"Gravação de pitch salva em {file_name} - {voice}.html!")
+                        webbrowser.open(f"file:///{file_path}")
+                else:
+                    messagebox.showinfo("Ação cancelada", f"Gravação cancelada!")
+
+            # Salva MIDI
+            pm = self.analyzer.notes_to_midi(success)
+            midi_path = self.music_ui_mgr.music_dir / f"{file_name}.mid" if self.music_ui_mgr.music_dir else f'./Musicas/{file_name}.mid'
+            self.analyzer.save_midi(pm, midi_path)
+
         else:
             messagebox.showerror("Erro", msg)
 
-    def _on_root_selected(self, event):
+    def _on_root_selected(self,
+                          event):
         """Callback quando tom é selecionado."""
         self.music_ui_mgr.root_var.set(self.music_ui_mgr.root_combo.get())
 
-    def _on_mode_selected(self, event):
+    def _on_mode_selected(self,
+                          event):
         """Callback quando modo é selecionado."""
         self.music_ui_mgr.mode_var.set(self.music_ui_mgr.mode_combo.get())
 
@@ -624,7 +736,8 @@ class VoiceRangeApp:
     # ANÁLISE
     # ============================================================
 
-    def toggle_group_or_voice_ranges(self):
+    def toggle_group_or_voice_ranges(self
+                                     ):
         """Alterna entre ranges de grupo e ranges base."""
         mode, ranges = self.analysis_mgr.toggle_range_mode()
 
@@ -639,7 +752,8 @@ class VoiceRangeApp:
 
         self.run_analysis()
 
-    def run_analysis(self):
+    def run_analysis(self
+                     ):
         """Executa análise de transposição."""
         try:
             piece_ranges = self.music_ui_mgr.get_voice_ranges()
@@ -656,7 +770,8 @@ class VoiceRangeApp:
         except Exception as e:
             messagebox.showerror("Erro", str(e))
 
-    def on_t_change(self, value):
+    def on_t_change(self,
+                    value):
         """Callback quando transposição muda."""
         try:
             T = int(float(value))

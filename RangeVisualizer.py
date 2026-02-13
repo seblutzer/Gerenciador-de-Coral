@@ -1,8 +1,8 @@
 import tkinter as tk
 from tkinter import ttk
-from GeneralFunctions import note_to_midi, midi_to_note
-from Constants import SEMITONE_TO_SHARP, VOICES, VOICE_BASE_RANGES, NOTE_TO_SEMITONE
+from Constants import VOICES, VOICE_BASE_RANGES
 from CoristasManager import CoristasManager
+import librosa
 
 # ===== VISUALIZADOR DE RANGES =====
 class RangeVisualizer:
@@ -37,16 +37,18 @@ class RangeVisualizer:
         self.scale = (self.CANVAS_WIDTH - self.LEFT_PAD - self.RIGHT_PAD) / self.MIDI_RANGE
         self.draw_grid()
 
-    def set_group_ranges(self, group_ranges):
+    def set_group_ranges(self,
+                         group_ranges):
         """
         group_ranges: dict[str, tuple[str, str]] com (min_note, max_note) por voz
         """
 
         self.group_ranges = group_ranges
 
-    def draw_grid(self):
-        for i, v in enumerate(self.voices):
-            y = 10 + i * self.ROW_HEIGHT
+    def draw_grid(self,
+                  group_ranges=None):
+        for i, v in enumerate(self.voices if not group_ranges else group_ranges):
+            y = 45 + i * self.ROW_HEIGHT
             self.canvas.create_line(0, y, self.CANVAS_WIDTH + 120, y, fill="#f0f0f0")
 
         # Offsets das notas naturais dentro de uma oitava (em semitons a partir de C)
@@ -65,18 +67,20 @@ class RangeVisualizer:
             x = int(self.LEFT_PAD + (s - self.MIDI_MIN) * self.scale) + 100
             self.canvas.create_line(x, 0, x, self.CANVAS_HEIGHT, fill="#e6e6e6", dash=(2, 4))
             try:
-                note = midi_to_note(s)
+                note = librosa.midi_to_note(s)
                 self.canvas.create_text(x + 2, 8, anchor="nw", text=note, fill="#888888", font=("Arial", 8))
             except Exception:
                 pass
 
-    def _x(self, midi_note):
+    def _x(self,
+           midi_note):
         # Ajusta a coordenada X subtraindo MIDI_MIN
         return int(self.LEFT_PAD + (midi_note - self.MIDI_MIN) * self.scale) + 100
 
-    def update(self, piece_ranges, T, Os, group_ranges=None, group_extension=None, voice_scores=None):
+    def update(self,
+               piece_ranges, T, Os, group_ranges=None, group_extension=None, voice_scores=None):
         self.canvas.delete("all")
-        self.draw_grid()
+        self.draw_grid(group_ranges)
 
         for idx, v in enumerate(group_ranges if group_ranges else self.voices):
             y = 30 + idx * self.ROW_HEIGHT
@@ -84,11 +88,11 @@ class RangeVisualizer:
 
             # Determinar o range base para validação de transposição
             if group_ranges:
-                g_min_m = note_to_midi(group_ranges[v][0])
-                g_max_m = note_to_midi(group_ranges[v][1])
+                g_min_m = librosa.note_to_midi(group_ranges[v][0])
+                g_max_m = librosa.note_to_midi(group_ranges[v][1])
             else:
-                g_min_m = note_to_midi(VOICE_BASE_RANGES[v][0])
-                g_max_m = note_to_midi(VOICE_BASE_RANGES[v][1])
+                g_min_m = librosa.note_to_midi(VOICE_BASE_RANGES[v][0])
+                g_max_m = librosa.note_to_midi(VOICE_BASE_RANGES[v][1])
 
             # Desenhar barras de grupo se existirem
             if group_ranges is not None and group_extension is not None:
@@ -96,8 +100,8 @@ class RangeVisualizer:
                 if v in group_extension and v in group_ranges:
                     # Só desenha group_extension se tem valores diferentes de group_ranges
                     if group_extension[v] != group_ranges[v]:
-                        ext_min_m = note_to_midi(group_extension[v][0])
-                        ext_max_m = note_to_midi(group_extension[v][1])
+                        ext_min_m = librosa.note_to_midi(group_extension[v][0])
+                        ext_max_m = librosa.note_to_midi(group_extension[v][1])
                         ext_x1 = self._x(ext_min_m)
                         ext_x2 = self._x(ext_max_m)
 
@@ -107,8 +111,8 @@ class RangeVisualizer:
 
                 # Desenhar barra de group_ranges (sólida)
                 if v in group_ranges:
-                    gr_min_m = note_to_midi(group_ranges[v][0])
-                    gr_max_m = note_to_midi(group_ranges[v][1])
+                    gr_min_m = librosa.note_to_midi(group_ranges[v][0])
+                    gr_max_m = librosa.note_to_midi(group_ranges[v][1])
                     gr_x1 = self._x(gr_min_m)
                     gr_x2 = self._x(gr_max_m)
 
@@ -116,8 +120,8 @@ class RangeVisualizer:
                                                  fill="#4169E1", outline="#000080")
             else:
                 # Comportamento padrão quando não há group_ranges/group_extension
-                base_min_m = note_to_midi(VOICE_BASE_RANGES[v][0])
-                base_max_m = note_to_midi(VOICE_BASE_RANGES[v][1])
+                base_min_m = librosa.note_to_midi(VOICE_BASE_RANGES[v][0])
+                base_max_m = librosa.note_to_midi(VOICE_BASE_RANGES[v][1])
                 x1 = self._x(base_min_m)
                 x2 = self._x(base_max_m)
                 # fill = "#90ee90", outline = "#2e8b57"
@@ -127,8 +131,8 @@ class RangeVisualizer:
             # Resto da lógica (piece_ranges e transposição)
             if v in {k: y for k, y in piece_ranges.items() if y != ('', '')}:
                 piece_min_str, piece_max_str = piece_ranges[v]
-                piece_min_m = note_to_midi(piece_min_str)
-                piece_max_m = note_to_midi(piece_max_str)
+                piece_min_m = librosa.note_to_midi(piece_min_str)
+                piece_max_m = librosa.note_to_midi(piece_max_str)
 
                 O = Os.get(v, 0)
                 trans_min = piece_min_m + T + 12 * O
