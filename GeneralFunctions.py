@@ -4,6 +4,16 @@ import sounddevice as sd
 import threading
 import librosa
 
+
+def rreplace(s, old, new):
+    if old == "":
+        return ""
+
+    i = s.rfind(old)
+    if i == -1:
+        return s
+    return s[:i] + new + s[i + len(old):]
+
 # ===== FUNÇÕES DE NOTA =====
 # Função para transpor uma nota
 def transpose_note(note,

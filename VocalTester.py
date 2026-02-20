@@ -1063,6 +1063,9 @@ class VocalTestCore:
             # Já conseguiu a primeira nota - é o limite grave final
             self.finish_test()
 
+        if self.piano_window and self.piano_window.is_active:
+            self.piano_window.close()
+
         self.is_listening = False
 
     def mark_too_high(self

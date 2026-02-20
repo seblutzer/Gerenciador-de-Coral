@@ -128,6 +128,8 @@ class CoristasUIManager:
                 values=(corista_nome, range_str, voz, vozes_rec, vozes_pos),
                 tags=(tag,) if tag else ()
             )
+        self._sort_column('Voz Atribuída')
+
 
     def _setup_voice_tags(self
                           ):
@@ -439,8 +441,6 @@ class CoristasUIManager:
 
             # Validar ranges
             try:
-                librosa.note_to_midi(novo_range_min)
-                librosa.note_to_midi(novo_range_max)
                 if librosa.note_to_midi(novo_range_min) > librosa.note_to_midi(novo_range_max):
                     raise ValueError(f"Range inválido: {novo_range_min} > {novo_range_max}")
             except Exception as e:

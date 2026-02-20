@@ -8,6 +8,10 @@ VOICE_BASE_RANGES = {
     "Baixo": ("E2", "C4"),
 }
 
+FEMALE_VOICES = {"Soprano", "Mezzo-soprano", "Contralto"}
+MALE_VOICES = {"Tenor", "Barítono", "Baixo"}
+OCTAVE_SHIFTS = [0, -12, +12, -24, +24]
+
 NOTE_TO_SEMITONE = {
     'C': 0, 'C#': 1, 'Db': 1,
     'D': 2, 'D#': 3, 'Eb': 3,

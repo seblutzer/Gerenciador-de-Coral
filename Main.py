@@ -22,6 +22,7 @@ from Constants import VOICES, VOICE_BASE_RANGES
 from RangeVisualizer import RangeVisualizer
 from MusicTranspose import AudioAnalyzer
 from VocalTester import VocalTestCore
+from GeneralFunctions import rreplace
 
 class VoiceRangeApp:
     """
@@ -57,6 +58,9 @@ class VoiceRangeApp:
         self.frame_analise = ttk.Frame(self.notebook)
         self.notebook.add(self.frame_analise, text="Biblioteca Musical")
         self.setup_analise_tab()
+
+        # Labels
+        self.sugest_label = ttk.Label(self.buttons_frame, text="Sugestão de Formação:", font=("Arial, 10"), padding=10)
 
     # ============================================================
     # ABA 1: GERENCIAR CORISTAS
@@ -237,13 +241,29 @@ class VoiceRangeApp:
         self.results_text.pack(anchor="w", padx=5, pady=3, fill="x")
         self.results_text.insert("end", "Resultados: Informe os ranges vocais e a faixa da música por voz.\n")
 
+        self.buttons_frame = ttk.LabelFrame(self.frame_analise, padding=10)
+        self.buttons_frame.pack(side='left')
+
         # ===== BOTÃO DINÂMICO =====
-        self.dynamic_ranges_button = ttk.Button(
-            self.frame_analise,
-            text="Usar Vozes\ndo Grupo",
-            command=self.toggle_group_or_voice_ranges
+        self.dynamic_ranges_button = ttk.Button(self.buttons_frame, text="Vozes do Grupo", command=self.toggle_group_or_voice_ranges)
+        self.dynamic_ranges_button.pack(padx=5)
+
+        # ===== BOTÃO DE MELHORES VOZES =====
+        self.calculate_voices_button = ttk.Button(self.buttons_frame, text="Aplicar Vozes", command=self.apply_best_voices)
+        self.calculate_voices_button.pack(padx=5)
+
+        # Slider de conforto
+        self.confort_slider = tk.Scale(
+            self.buttons_frame,
+            from_=0, to=1,
+            orient="horizontal",
+            label="Grave - Agudo",
+            command=self.on_confort_change,
+            length=60,
+            resolution=0.1
         )
-        self.dynamic_ranges_button.pack(side="left", padx=5)
+        self.confort_slider.set(0.3)
+        self.confort_slider.pack(fill="x", padx=10, pady=10)
 
         # ===== VISUALIZADOR =====
         self.visualizer = RangeVisualizer(
@@ -254,8 +274,133 @@ class VoiceRangeApp:
         )
 
         # Carrega biblioteca inicial
-        self.music_ui_mgr.update_music_library(self.coristas_ui_mgr.get_current_group())
+        self.coristas_ui_mgr.grupo_nome_var.set(self.coristas_ui_mgr.grupo_combo.get())
+        self.music_ui_mgr.update_music_library(self.coristas_ui_mgr.grupo_nome_var.get())
 
+    def on_confort_change(self, value):
+        self.run_analysis(confort=value)
+        self.t_slider.set(self.analysis_mgr.analysis_all['best_T'])
+
+    def apply_best_voices(self):
+        try:
+            best_voices = self.analysis_mgr.analysis_all['possible_fit'].get(int(self.t_slider.get()), None)
+
+            # Coletar todas as mudanças propostas
+            changes = []
+            for voice in best_voices:
+                if voice in VOICE_BASE_RANGES:
+                    for name in best_voices[voice]:
+                        current_voice = self.coristas_mgr.coristas[name]['voz_atribuida']
+                        if current_voice != voice:
+                            changes.append({
+                                'name': name,
+                                'from': current_voice,
+                                'to': voice
+                            })
+
+            if not changes:
+                messagebox.showinfo(title='Nenhuma alteração',
+                                    message='Não há alterações a serem feitas.')
+                return
+
+            # Mostrar diálogo de seleção
+            selected_changes = self.show_changes_dialog(changes)
+
+            # Aplicar mudanças selecionadas
+            if selected_changes:
+                applied_msg = ''
+                for change in selected_changes:
+                    self.coristas_mgr.coristas[change['name']]['voz_atribuida'] = change['to']
+                    applied_msg += f"- {change['name']} foi alterado de {change['from']} para {change['to']}\n"
+
+                applied_msg += '\nPara salvar as alterações, salve a música'
+                messagebox.showinfo(title='Alterações realizadas!', message=applied_msg)
+
+                self.coristas_ui_mgr.reload_table()
+                self.analysis_mgr._use_group_ranges = not self.analysis_mgr._use_group_ranges
+                self.toggle_group_or_voice_ranges()
+
+        except Exception as e:
+            messagebox.showerror(title='Erro', message=f'Erro ao aplicar alterações: {str(e)}')
+
+    def show_changes_dialog(self, changes):
+        dialog = tk.Toplevel(self.master)
+        dialog.title('Selecionar Mudanças')
+        dialog.geometry('300x300')
+        dialog.transient(self.master)
+        dialog.grab_set()
+
+        # Variável para armazenar o resultado
+        result = []
+
+        # Frame principal com scrollbar
+        main_frame = ttk.Frame(dialog, padding="10")
+        main_frame.pack(fill='both', expand=True)
+
+        # Label de instruções
+        ttk.Label(main_frame,
+                  text='Selecione as mudanças que deseja aplicar:',
+                  font=('Arial', 10, 'bold')).pack(pady=(0, 10))
+
+        # Frame com canvas e scrollbar para a lista de checkboxes
+        canvas_frame = ttk.Frame(main_frame)
+        canvas_frame.pack(fill='both', expand=True)
+
+        canvas = tk.Canvas(canvas_frame)
+        scrollbar = ttk.Scrollbar(canvas_frame, orient='vertical', command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        scrollable_frame.bind(
+            '<Configure>',
+            lambda e: canvas.configure(scrollregion=canvas.bbox('all'))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor='nw')
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Variáveis para os checkboxes
+        check_vars = []
+
+        for i, change in enumerate(changes):
+            var = tk.BooleanVar(value=True)  # Marcado por padrão
+            check_vars.append(var)
+
+            text = f"{change['name']}: {change['from']} → {change['to']}"
+            cb = ttk.Checkbutton(scrollable_frame, text=text, variable=var)
+            cb.pack(anchor='w', pady=2, padx=5)
+
+        canvas.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+
+        # Frame de botões
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill='x', pady=(0, 0))
+
+        def apply_selected():
+            nonlocal result
+            result = [changes[i] for i, var in enumerate(check_vars) if var.get()]
+            dialog.destroy()
+
+        def cancel():
+            nonlocal result
+            result = []
+            dialog.destroy()
+
+        # Botões
+        ttk.Button(button_frame, text='Aceitar',
+                   command=apply_selected).pack(side='left', padx=15)
+        ttk.Button(button_frame, text='Recusar',
+                   command=cancel).pack(side='left', padx=15)
+
+        # Centralizar diálogo
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
+        y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f'+{x}+{y}')
+
+        # Aguardar fechamento do diálogo
+        dialog.wait_window()
+
+        return result
     # ============================================================
     # CALLBACKS - CORISTAS
     # ============================================================
@@ -668,9 +813,9 @@ class VoiceRangeApp:
         if getattr(self.analysis_mgr, '_use_group_ranges', None):
             self.analysis_mgr._use_group_ranges = not self.analysis_mgr._use_group_ranges
             self.toggle_group_or_voice_ranges()
+            self.t_slider.set(self.analysis_mgr.analysis_all['best_T'])
         else:
-            self.run_analysis()
-
+            self.on_confort_change(float(self.confort_slider.get()))
     def load_voice_audio_files(self
                                ):
         """Carrega e processa arquivos de áudio."""
@@ -736,39 +881,36 @@ class VoiceRangeApp:
     # ANÁLISE
     # ============================================================
 
-    def toggle_group_or_voice_ranges(self
-                                     ):
-        """Alterna entre ranges de grupo e ranges base."""
+    def toggle_group_or_voice_ranges(self):
         mode, ranges = self.analysis_mgr.toggle_range_mode()
 
-        if mode == 'grupo':
-            self.dynamic_ranges_button.config(text='Usar Padrão\nVocal')
-            if hasattr(self.visualizer, "set_group_ranges"):
-                self.visualizer.set_group_ranges(ranges)
+        if hasattr(self.visualizer, "set_group_ranges"):
+            self.visualizer.set_group_ranges(ranges if mode == "grupo" else None)
+        if mode == "grupo":
+            self.dynamic_ranges_button.config(text="Padrão Vocal")
         else:
-            self.dynamic_ranges_button.config(text='Usar Vozes\ndo Grupo')
-            if hasattr(self.visualizer, "set_group_ranges"):
-                self.visualizer.set_group_ranges(None)
-
+            self.dynamic_ranges_button.config(text="Vozes do Grupo")
         self.run_analysis()
 
-    def run_analysis(self
-                     ):
+    def run_analysis(self,
+                     confort=None):
         """Executa análise de transposição."""
-        try:
-            piece_ranges = self.music_ui_mgr.get_voice_ranges()
-            root = self.music_ui_mgr.root_var.get()
-            mode = self.music_ui_mgr.mode_var.get()
+        #try:
+        piece_ranges = self.music_ui_mgr.get_voice_ranges()
+        root = self.music_ui_mgr.root_var.get()
+        mode = self.music_ui_mgr.mode_var.get()
+        confort = float(self.confort_slider.get()) if not confort else float(confort)
 
-            # Executa análise
-            analysis_result = self.analysis_mgr.run_analysis(piece_ranges, root, mode)
+        # Executa análise
+        viz_data = self.analysis_mgr.get_visualization_data(int(self.t_slider.get()))
+        analysis_result = self.analysis_mgr.run_analysis(piece_ranges, root, mode, viz_data, confort)
 
-            if analysis_result:
-                # Atualiza exibição
-                self.on_t_change(self.t_slider.get())
+        if analysis_result:
+            # Atualiza exibição
+            self.on_t_change(self.t_slider.get())
 
-        except Exception as e:
-            messagebox.showerror("Erro", str(e))
+        #except Exception as e:
+        #    messagebox.showerror("Erro", str(e))
 
     def on_t_change(self,
                     value):
@@ -784,12 +926,14 @@ class VoiceRangeApp:
             per_voice_Os = self.analysis_mgr.compute_transposition_for_t(T)
 
             # Atualiza visualização
-            viz_data = self.analysis_mgr.get_visualization_data()
+            viz_data = self.analysis_mgr.get_visualization_data(T)
             self.visualizer.update(
                 piece_ranges, T, per_voice_Os,
-                viz_data['group_ranges'],
-                viz_data['group_extension'],
-                viz_data['voice_scores']
+                group_ranges=viz_data['group_ranges'],
+                group_extension=viz_data['group_extension'],
+                voice_scores=viz_data['voice_scores'],
+                possible_fit=viz_data['possible_fit'],
+                not_fit=viz_data['not_fit']
             )
 
             # Atualiza texto de resultados
@@ -799,7 +943,6 @@ class VoiceRangeApp:
 
             self.results_text.delete(1.0, "end")
             self.results_text.insert("end", results_text)
-
         except:
             pass
 
